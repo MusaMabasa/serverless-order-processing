@@ -1,0 +1,753 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  Serverless Order Processing System using
+  Amazon API Gateway, Lambda, SQS, DynamoDB,
+  Amazon Cognito, CloudWatch and SNS.
+
+Globals:
+  Function:
+    Runtime: python3.13
+    MemorySize: 128
+    Timeout: 30
+
+Resources:
+
+  # ==========================================
+  # COGNITO USER POOL
+  # ==========================================
+
+  OrderUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: serverless-order-users
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      MfaConfiguration: OPTIONAL
+      EnabledMfas:
+        - SOFTWARE_TOKEN_MFA
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+
+  # ==========================================
+  # COGNITO APP CLIENT
+  # ==========================================
+
+  OrderUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: serverless-order-client
+      UserPoolId: !Ref OrderUserPool
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      AccessTokenValidity: 1
+      IdTokenValidity: 1
+      RefreshTokenValidity: 7
+      TokenValidityUnits:
+        AccessToken: hours
+        IdToken: hours
+        RefreshToken: days
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+  # ==========================================
+  # API GATEWAY
+  # ==========================================
+
+  OrderApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/apigateway/serverless-order-api
+      RetentionInDays: 14
+
+  OrderApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: serverless-order-api
+      StageName: Prod
+      AccessLogSetting:
+        DestinationArn: !GetAtt OrderApiAccessLogGroup.Arn
+        Format: '{ "requestId":"$context.requestId", "ip":"$context.identity.sourceIp", "requestTime":"$context.requestTime", "httpMethod":"$context.httpMethod", "resourcePath":"$context.resourcePath", "status":"$context.status", "responseLength":"$context.responseLength", "responseLatency":"$context.responseLatency", "integrationLatency":"$context.integrationLatency", "integrationError":"$context.integrationErrorMessage" }'
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingRateLimit: 10
+          ThrottlingBurstLimit: 20
+          MetricsEnabled: true
+
+      Models:
+        OrderRequest:
+          type: object
+          required:
+            - customer_name
+            - customer_email
+            - items
+          additionalProperties: false
+          properties:
+            customer_name:
+              type: string
+              minLength: 1
+            customer_email:
+              type: string
+              minLength: 1
+            items:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required:
+                  - product
+                  - quantity
+                  - price
+                additionalProperties: false
+                properties:
+                  product:
+                    type: string
+                    minLength: 1
+                  quantity:
+                    type: integer
+                    minimum: 1
+                  price:
+                    type: number
+                    minimum: 0
+
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt OrderUserPool.Arn
+
+  # ==========================================
+  # DEAD LETTER QUEUE
+  # ==========================================
+
+  OrderDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: serverless-order-dlq
+      SqsManagedSseEnabled: true
+
+  # ==========================================
+  # MAIN ORDER QUEUE
+  # ==========================================
+
+  OrderQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: serverless-order-queue
+      SqsManagedSseEnabled: true
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt OrderDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # ==========================================
+  # DYNAMODB ORDERS TABLE
+  # ==========================================
+
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ServerlessOrders
+      BillingMode: PAY_PER_REQUEST
+      SSESpecification:
+        SSEEnabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: order_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: order_id
+          KeyType: HASH
+
+  # ==========================================
+  # CREATE ORDER LAMBDA
+  # API GATEWAY -> LAMBDA -> SQS
+  # ==========================================
+
+  CreateOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: serverless-create-order
+      CodeUri: backend/create_order/
+      Handler: app.lambda_handler
+
+      Environment:
+        Variables:
+          ORDER_QUEUE_URL: !Ref OrderQueue
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sqs:SendMessage
+              Resource: !GetAtt OrderQueue.Arn
+
+      Events:
+        CreateOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /orders
+            Method: POST
+            RequestModel:
+              Model: OrderRequest
+              Required: true
+              ValidateBody: true
+
+  # ==========================================
+  # PROCESS ORDER LAMBDA
+  # SQS -> LAMBDA -> DYNAMODB
+  # ==========================================
+
+  ProcessOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: serverless-process-order
+      CodeUri: backend/process_order/
+      Handler: app.lambda_handler
+
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref OrdersTable
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+              Resource: !GetAtt OrdersTable.Arn
+
+      Events:
+        OrderQueueEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OrderQueue.Arn
+            BatchSize: 1
+
+  # ==========================================
+  # SNS ALERT TOPIC
+  # ==========================================
+
+  OrderAlertsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: serverless-order-alerts
+
+  # ==========================================
+  # SNS EMAIL SUBSCRIPTION
+  # ==========================================
+
+  OrderAlertsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref OrderAlertsTopic
+      Protocol: email
+      Endpoint: musa@bluetechnology.co.za
+
+  # ==========================================
+  # CREATE ORDER LAMBDA ERROR ALARM
+  # ==========================================
+
+  CreateOrderErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-create-order-errors
+      AlarmDescription: Alarm when CreateOrder Lambda records errors
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CreateOrderFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # PROCESS ORDER LAMBDA ERROR ALARM
+  # ==========================================
+
+  ProcessOrderErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-process-order-errors
+      AlarmDescription: Alarm when ProcessOrder Lambda records errors
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ProcessOrderFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # DEAD LETTER QUEUE ALARM
+  # ==========================================
+
+  OrderDLQMessagesAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-order-dlq-messages
+      AlarmDescription: Alarm when messages appear in the serverless order DLQ
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt OrderDeadLetterQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # MAIN QUEUE BACKLOG ALARM
+  # ==========================================
+
+  OrderQueueBacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-order-queue-backlog
+      AlarmDescription: Alarm when 5 or more messages are waiting in the main order queue
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt OrderQueue.QueueName
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # API GATEWAY 4XX ALARM
+  # ==========================================
+
+  Api4xxErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-api-4xx-errors
+      AlarmDescription: Alarm when API Gateway returns multiple 4XX errors
+      Namespace: AWS/ApiGateway
+      MetricName: 4XXError
+      Dimensions:
+        - Name: ApiName
+          Value: serverless-order-api
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # API GATEWAY 5XX ALARM
+  # ==========================================
+
+  Api5xxErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-api-5xx-errors
+      AlarmDescription: Alarm when API Gateway returns 5XX errors
+      Namespace: AWS/ApiGateway
+      MetricName: 5XXError
+      Dimensions:
+        - Name: ApiName
+          Value: serverless-order-api
+        - Name: Stage
+          Value: Prod
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # API GATEWAY HIGH LATENCY ALARM
+  # ==========================================
+
+  ApiHighLatencyAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-api-high-latency
+      AlarmDescription: Alarm when API Gateway average latency exceeds 2 seconds
+      Namespace: AWS/ApiGateway
+      MetricName: Latency
+      Dimensions:
+        - Name: ApiName
+          Value: serverless-order-api
+        - Name: Stage
+          Value: Prod
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 2000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+      OKActions:
+        - !Ref OrderAlertsTopic
+
+  # ==========================================
+  # CLOUDWATCH DASHBOARD
+  # ==========================================
+
+  OrderProcessingDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: serverless-order-processing-dashboard
+
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "text",
+              "x": 0,
+              "y": 0,
+              "width": 24,
+              "height": 2,
+              "properties": {
+                "markdown": "# Serverless Order Processing Monitoring\nAPI Gateway -> Lambda -> SQS -> Lambda -> DynamoDB"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 2,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Requests",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "Count",
+                    "ApiName",
+                    "serverless-order-api",
+                    "Stage",
+                    "Prod"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 2,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Errors",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "4XXError",
+                    "ApiName",
+                    "serverless-order-api",
+                    "Stage",
+                    "Prod"
+                  ],
+                  [
+                    ".",
+                    "5XXError",
+                    ".",
+                    ".",
+                    ".",
+                    "."
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 8,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "API Gateway Latency",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Average",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/ApiGateway",
+                    "Latency",
+                    "ApiName",
+                    "serverless-order-api",
+                    "Stage",
+                    "Prod"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 8,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Invocations",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/Lambda",
+                    "Invocations",
+                    "FunctionName",
+                    "${CreateOrderFunction}"
+                  ],
+                  [
+                    ".",
+                    "Invocations",
+                    "FunctionName",
+                    "${ProcessOrderFunction}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 14,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Lambda Errors",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/Lambda",
+                    "Errors",
+                    "FunctionName",
+                    "${CreateOrderFunction}"
+                  ],
+                  [
+                    ".",
+                    "Errors",
+                    "FunctionName",
+                    "${ProcessOrderFunction}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 14,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "SQS Queue Depth",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Maximum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/SQS",
+                    "ApproximateNumberOfMessagesVisible",
+                    "QueueName",
+                    "${OrderQueue.QueueName}"
+                  ],
+                  [
+                    ".",
+                    "ApproximateNumberOfMessagesNotVisible",
+                    "QueueName",
+                    "${OrderQueue.QueueName}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 20,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Dead Letter Queue",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Maximum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/SQS",
+                    "ApproximateNumberOfMessagesVisible",
+                    "QueueName",
+                    "${OrderDeadLetterQueue.QueueName}"
+                  ]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 20,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "DynamoDB Activity",
+                "region": "${AWS::Region}",
+                "view": "timeSeries",
+                "stat": "Sum",
+                "period": 300,
+                "metrics": [
+                  [
+                    "AWS/DynamoDB",
+                    "ConsumedWriteCapacityUnits",
+                    "TableName",
+                    "${OrdersTable}"
+                  ],
+                  [
+                    ".",
+                    "ConsumedReadCapacityUnits",
+                    "TableName",
+                    "${OrdersTable}"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+
+# ==========================================
+# OUTPUTS
+# ==========================================
+
+Outputs:
+
+  CreateOrderApiUrl:
+    Description: API Gateway endpoint for creating orders
+    Value: !Sub >
+      https://${OrderApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/Prod/orders
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref OrderUserPool
+
+  UserPoolClientId:
+    Description: Cognito User Pool App Client ID
+    Value: !Ref OrderUserPoolClient
+
+  UserPoolArn:
+    Description: Cognito User Pool ARN
+    Value: !GetAtt OrderUserPool.Arn
+
+  OrderQueueUrl:
+    Description: URL of the main order processing queue
+    Value: !Ref OrderQueue
+
+  OrderQueueArn:
+    Description: ARN of the main order processing queue
+    Value: !GetAtt OrderQueue.Arn
+
+  OrderDeadLetterQueueUrl:
+    Description: URL of the order DLQ
+    Value: !Ref OrderDeadLetterQueue
+
+  OrderDeadLetterQueueArn:
+    Description: ARN of the order DLQ
+    Value: !GetAtt OrderDeadLetterQueue.Arn
+
+  OrdersTableName:
+    Description: DynamoDB orders table
+    Value: !Ref OrdersTable
+
+  CreateOrderFunctionName:
+    Description: Create Order Lambda function
+    Value: !Ref CreateOrderFunction
+
+  ProcessOrderFunctionName:
+    Description: Process Order Lambda function
+    Value: !Ref ProcessOrderFunction
+
+  OrderAlertsTopicArn:
+    Description: SNS topic used for CloudWatch alarm notifications
+    Value: !Ref OrderAlertsTopic
+
+  DashboardName:
+    Description: CloudWatch monitoring dashboard
+    Value: !Ref OrderProcessingDashboard
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

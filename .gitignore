@@ -1,0 +1,37 @@
+# AWS SAM
+.aws-sam/
+samconfig.toml
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+
+# Environment / secrets
+.env
+*.env
+
+# IDE
+.idea/
+.vscode/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Application builds
+build/
+dist/
+*.spec
+# Local SAM template backups
+template-before-*.yaml
+template-with-monitoring-backup.yaml
+
+# Local test / recovery payloads
+order-test.json
+order-recovery.json
+
+# Local API Gateway account setup
+apigateway-cloudwatch-trust.json
