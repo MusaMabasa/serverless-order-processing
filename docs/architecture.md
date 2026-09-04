@@ -1,3 +1,52 @@
+# Serverless Order Processing Architecture
+
+```mermaid
+flowchart LR
+
+    User["Client / User"]
+    Cognito["Amazon Cognito<br/>Authentication<br/>Optional TOTP MFA"]
+    APIGW["Amazon API Gateway<br/>POST /orders<br/>Cognito Authorizer<br/>Request Validation<br/>Throttling"]
+    CreateLambda["AWS Lambda<br/>Create Order<br/>Python 3.13"]
+    SQS["Amazon SQS<br/>Order Queue<br/>SSE Enabled"]
+    ProcessLambda["AWS Lambda<br/>Process Order<br/>Python 3.13"]
+    DynamoDB["Amazon DynamoDB<br/>ServerlessOrders<br/>Encryption + PITR"]
+    DLQ["Amazon SQS<br/>Dead-Letter Queue"]
+    CloudWatch["Amazon CloudWatch<br/>Logs / Metrics<br/>Dashboard / 7 Alarms"]
+    SNS["Amazon SNS<br/>Operational Alerts"]
+    SAM["AWS SAM / CloudFormation<br/>Infrastructure as Code"]
+    GitHub["GitHub Actions<br/>Unit Tests / Validate / Build"]
+
+    User -->|"Authenticate"| Cognito
+    Cognito -->|"JWT Token"| User
+
+    User -->|"POST /orders + JWT"| APIGW
+    APIGW -->|"Authorized Request"| CreateLambda
+
+    CreateLambda -->|"Send Message"| SQS
+    SQS -->|"Event Source"| ProcessLambda
+    ProcessLambda -->|"PutItem"| DynamoDB
+
+    SQS -->|"Repeated Failures"| DLQ
+
+    APIGW -.->|"Logs / Metrics"| CloudWatch
+    CreateLambda -.->|"Logs / Metrics"| CloudWatch
+    ProcessLambda -.->|"Logs / Metrics"| CloudWatch
+    SQS -.->|"Queue Metrics"| CloudWatch
+    DLQ -.->|"DLQ Metrics"| CloudWatch
+    DynamoDB -.->|"Metrics"| CloudWatch
+
+    CloudWatch -->|"Alarm Notifications"| SNS
+
+    SAM -.-> APIGW
+    SAM -.-> Cognito
+    SAM -.-> CreateLambda
+    SAM -.-> SQS
+    SAM -.-> ProcessLambda
+    SAM -.-> DynamoDB
+    SAM -.-> CloudWatch
+    SAM -.-> SNS
+
+    GitHub -->|"CI Validation"| SAM
 ```
 
 ## Request Flow
