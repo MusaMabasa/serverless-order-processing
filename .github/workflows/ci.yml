@@ -14,6 +14,14 @@ jobs:
     name: Test, Validate and Build
     runs-on: ubuntu-latest
 
+    env:
+      AWS_DEFAULT_REGION: af-south-1
+      AWS_REGION: af-south-1
+      AWS_ACCESS_KEY_ID: testing
+      AWS_SECRET_ACCESS_KEY: testing
+      ORDER_QUEUE_URL: https://sqs.af-south-1.amazonaws.com/123456789012/test-order-queue
+      ORDERS_TABLE: TestOrders
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
