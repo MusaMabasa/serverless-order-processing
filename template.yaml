@@ -269,6 +269,38 @@ Resources:
             Path: /orders
             Method: GET
 
+
+  # =======================================================
+  # GET SINGLE ORDER LAMBDA
+  # API GATEWAY -> LAMBDA -> DYNAMODB
+  # =======================================================
+
+  GetOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: serverless-get-order
+      CodeUri: backend/get_order/
+      Handler: app.lambda_handler
+
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref OrdersTable
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+              Resource: !GetAtt OrdersTable.Arn
+
+      Events:
+        GetOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /orders/{order_id}
+            Method: GET
+
   # =======================================================
   # PROCESS ORDER LAMBDA
   # SQS -> LAMBDA -> DYNAMODB
@@ -357,6 +389,32 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: serverless-get-orders
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+
+
+  # =======================================================
+  # GET SINGLE ORDER LAMBDA ERROR ALARM
+  # =======================================================
+
+  GetOrderErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-get-order-errors
+      AlarmDescription: >
+        Alarm when the Get Order Lambda function reports errors.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: serverless-get-order
       Statistic: Sum
       Period: 60
       EvaluationPeriods: 1
@@ -804,6 +862,10 @@ Outputs:
   OrdersTableName:
     Description: DynamoDB Orders table
     Value: !Ref OrdersTable
+
+  GetOrderFunctionName:
+    Description: Get Single Order Lambda function
+    Value: !Ref GetOrderFunction
 
   CreateOrderFunctionName:
     Description: Create Order Lambda function
