@@ -1,8 +1,8 @@
 # Serverless Order Processing System on AWS
 
-A production-style **serverless order processing system** built on AWS using event-driven architecture, Infrastructure as Code (IaC), authentication, monitoring, security controls, automated testing, CI, and automatic failure handling.
+A production-style **serverless order processing system** built on AWS using event-driven architecture, Infrastructure as Code (IaC), authentication, asynchronous processing, monitoring, security controls, automated testing, continuous integration, and automatic failure handling.
 
-This project demonstrates practical AWS Cloud Engineering skills including API development, asynchronous processing, serverless compute, NoSQL storage, authentication, observability, security hardening, failure recovery, Infrastructure as Code, and continuous integration.
+This project demonstrates practical AWS Cloud Engineering skills including REST API development, serverless compute, asynchronous messaging, NoSQL storage, authentication and authorization, observability, security hardening, failure recovery, Infrastructure as Code, automated testing, and CI.
 
 ---
 
@@ -10,23 +10,75 @@ This project demonstrates practical AWS Cloud Engineering skills including API d
 
 ![Serverless Order Processing Architecture](docs/architecture.png)
 
-The application uses an event-driven serverless architecture to securely accept, queue, process, store, and monitor customer orders.
+The application uses an event-driven serverless architecture to securely create, queue, process, retrieve, store, and monitor customer orders.
 
-### Core Request Flow
+### Create Order Flow
 
-`Client -> Amazon Cognito -> API Gateway -> Create Order Lambda -> Amazon SQS -> Process Order Lambda -> Amazon DynamoDB`
+```text
+Client
+  |
+  v
+Amazon Cognito
+  |
+  v
+JWT Token
+  |
+  v
+Amazon API Gateway
+  |
+  | POST /orders
+  v
+Create Order Lambda
+  |
+  v
+Amazon SQS
+  |
+  v
+Process Order Lambda
+  |
+  v
+Amazon DynamoDB
+```
+
+### Retrieve Orders Flow
+
+```text
+Client
+  |
+  v
+Amazon Cognito
+  |
+  v
+JWT Token
+  |
+  v
+Amazon API Gateway
+  |
+  | GET /orders
+  v
+Get Orders Lambda
+  |
+  v
+Amazon DynamoDB
+```
 
 ### Failure Handling
 
-`Processing Failure -> SQS Retry -> Dead-Letter Queue`
+```text
+Processing Failure -> SQS Retry -> Dead-Letter Queue
+```
 
 ### Monitoring
 
-`AWS Services -> Amazon CloudWatch -> Amazon SNS -> Email Alerts`
+```text
+AWS Services -> Amazon CloudWatch -> Amazon SNS -> Email Alerts
+```
 
 ### CI Pipeline
 
-`Git Push -> GitHub Actions -> Unit Tests -> SAM Validation -> SAM Build`
+```text
+Git Push -> GitHub Actions -> Unit Tests -> SAM Validation -> SAM Build
+```
 
 [View detailed architecture and request flow](docs/architecture.md)
 
@@ -34,21 +86,40 @@ The application uses an event-driven serverless architecture to securely accept,
 
 ## AWS Services
 
-| Service            | Purpose                                      |
-| ------------------ | -------------------------------------------- |
-| Amazon Cognito     | User authentication and JWT token management |
-| Amazon API Gateway | Secure REST API endpoint                     |
-| AWS Lambda         | Serverless order creation and processing     |
-| Amazon SQS         | Asynchronous order queue                     |
-| Amazon SQS DLQ     | Stores repeatedly failed messages            |
-| Amazon DynamoDB    | Persistent order storage                     |
-| Amazon CloudWatch  | Logs, metrics, alarms, and dashboard         |
-| Amazon SNS         | Operational alarm notifications              |
-| AWS IAM            | Least-privilege permissions                  |
-| AWS SAM            | Infrastructure as Code                       |
-| AWS CloudFormation | AWS resource provisioning                    |
-| GitHub Actions     | Continuous integration                       |
-| GitHub             | Source control and project hosting           |
+| Service            | Purpose                                           |
+| ------------------ | ------------------------------------------------- |
+| Amazon Cognito     | User authentication, JWT tokens, and optional MFA |
+| Amazon API Gateway | Authenticated REST API                            |
+| AWS Lambda         | Create, process, and retrieve orders              |
+| Amazon SQS         | Asynchronous order queue                          |
+| Amazon SQS DLQ     | Isolation of repeatedly failed messages           |
+| Amazon DynamoDB    | Persistent order storage                          |
+| Amazon CloudWatch  | Logs, metrics, alarms, and dashboard              |
+| Amazon SNS         | Operational alarm notifications                   |
+| AWS IAM            | Least-privilege service permissions               |
+| AWS SAM            | Serverless Infrastructure as Code                 |
+| AWS CloudFormation | AWS resource provisioning                         |
+| GitHub Actions     | Continuous integration                            |
+| GitHub             | Source control and project hosting                |
+
+---
+
+## API Endpoints
+
+The application currently exposes two authenticated operations.
+
+| Method | Endpoint  | Purpose                                        |
+| ------ | --------- | ---------------------------------------------- |
+| `POST` | `/orders` | Submit a new order for asynchronous processing |
+| `GET`  | `/orders` | Retrieve processed orders                      |
+
+Both endpoints require a valid Amazon Cognito JWT.
+
+Requests without valid authentication are rejected with:
+
+```text
+Unauthorized
+```
 
 ---
 
@@ -58,19 +129,21 @@ The application uses an event-driven serverless architecture to securely accept,
 
 Users authenticate through **Amazon Cognito**.
 
-Cognito provides a JWT token after successful authentication.
+After successful authentication, Cognito returns JWT tokens.
 
-The token is included in API requests:
+The ID token is supplied to API Gateway:
 
 ```text
 Authorization: Bearer <JWT_TOKEN>
 ```
 
-API Gateway uses a Cognito Authorizer to validate the token before allowing access to the order API.
+API Gateway uses a Cognito User Pool Authorizer to validate the token before allowing access to protected API operations.
 
-Unauthenticated or expired requests are rejected.
+Unauthenticated, invalid, or expired requests are rejected.
 
 ---
+
+## POST /orders
 
 ### 2. Create Order Request
 
@@ -96,7 +169,7 @@ Example request:
 }
 ```
 
-API Gateway performs request validation before forwarding valid requests to the Create Order Lambda function.
+API Gateway performs request-body validation before forwarding valid requests to the Create Order Lambda.
 
 ---
 
@@ -107,7 +180,7 @@ The **Create Order Lambda**:
 * Parses the request body
 * Validates customer information
 * Validates order items
-* Calculates the order total
+* Calculates the total
 * Generates a unique order ID
 * Adds a creation timestamp
 * Sets the initial status to `QUEUED`
@@ -123,23 +196,19 @@ Example response:
 }
 ```
 
-The API returns HTTP:
+The API returns:
 
 ```text
 202 Accepted
 ```
 
-This allows the API to respond without waiting for the complete order-processing operation.
+The client therefore does not need to wait for downstream order processing to finish.
 
 ---
 
 ### 4. Amazon SQS
 
-Amazon SQS decouples order submission from order processing.
-
-The API-facing Lambda does not directly write the order to DynamoDB.
-
-Instead:
+Amazon SQS decouples order submission from processing.
 
 ```text
 Create Order Lambda
@@ -151,13 +220,14 @@ Create Order Lambda
 Process Order Lambda
 ```
 
-This architecture improves:
+This design improves:
 
 * Reliability
 * Scalability
 * Fault tolerance
 * Service decoupling
 * Failure recovery
+* Traffic buffering
 
 SQS server-side encryption is enabled.
 
@@ -165,20 +235,22 @@ SQS server-side encryption is enabled.
 
 ### 5. Process Order Lambda
 
-The **Process Order Lambda** is triggered automatically when an order becomes available in the SQS queue.
+The **Process Order Lambda** is automatically triggered by messages arriving in the SQS queue.
 
 The function:
 
-1. Reads the SQS message
-2. Parses the order
+1. Reads the SQS event
+2. Parses each order message
 3. Validates the `order_id`
-4. Changes the order status to `COMPLETED`
+4. Sets the status to `COMPLETED`
 5. Adds a `processed_at` timestamp
 6. Writes the completed order to DynamoDB
 
+This separates the API request lifecycle from backend order processing.
+
 ---
 
-### 6. DynamoDB
+### 6. Amazon DynamoDB
 
 Processed orders are stored in:
 
@@ -206,7 +278,7 @@ Example stored order:
 }
 ```
 
-DynamoDB security and resilience features include:
+DynamoDB is configured with:
 
 * Server-side encryption
 * Point-in-Time Recovery
@@ -214,9 +286,69 @@ DynamoDB security and resilience features include:
 
 ---
 
+## GET /orders
+
+### 7. Retrieve Orders Request
+
+Authenticated clients can retrieve processed orders using:
+
+```http
+GET /orders
+```
+
+API Gateway validates the Cognito JWT before invoking the Get Orders Lambda.
+
+A request without authentication correctly returns:
+
+```json
+{
+  "message": "Unauthorized"
+}
+```
+
+---
+
+### 8. Get Orders Lambda
+
+The **Get Orders Lambda** retrieves orders from the `ServerlessOrders` DynamoDB table.
+
+The function:
+
+* Scans the DynamoDB table
+* Handles DynamoDB pagination using `LastEvaluatedKey`
+* Combines results across multiple scan operations
+* Sorts orders by `created_at`
+* Returns newest orders first
+* Converts DynamoDB `Decimal` values to JSON-compatible numbers
+* Returns a count and order collection
+* Handles DynamoDB errors with HTTP 500 responses
+
+Example response:
+
+```json
+{
+  "count": 6,
+  "orders": [
+    {
+      "order_id": "ORD-7ED11B6E",
+      "customer_name": "Mabasa Technologies",
+      "customer_email": "customer@example.com",
+      "status": "COMPLETED",
+      "total": 100,
+      "created_at": "2026-09-04T09:31:29+00:00",
+      "processed_at": "2026-09-04T09:31:30+00:00"
+    }
+  ]
+}
+```
+
+The endpoint was successfully tested against the deployed AWS environment.
+
+---
+
 ## Failure Handling
 
-The application implements automatic retry and Dead-Letter Queue handling.
+The application implements automatic SQS retry and Dead-Letter Queue handling.
 
 ```text
 Main SQS Queue
@@ -241,15 +373,13 @@ The main queue uses a redrive policy with:
 maxReceiveCount = 3
 ```
 
-Failed messages are retried automatically.
-
 Messages that continue failing are moved to:
 
 ```text
 serverless-order-dlq
 ```
 
-This prevents problematic messages from blocking normal order processing.
+This prevents problematic messages from blocking normal processing.
 
 ---
 
@@ -257,38 +387,29 @@ This prevents problematic messages from blocking normal order processing.
 
 Failure handling was tested using a deliberately invalid SQS message.
 
-The Process Order Lambda failed while parsing the invalid message.
+The Process Order Lambda failed while parsing the malformed message.
 
-The message was automatically retried and eventually transferred to the Dead-Letter Queue.
+Amazon SQS automatically retried the message before moving it to the Dead-Letter Queue.
 
-The DLQ message showed:
-
-```text
-ApproximateReceiveCount: 4
-DeadLetterQueueSourceArn: serverless-order-queue
-```
-
-This successfully demonstrated:
+The DLQ test demonstrated:
 
 * Lambda failure handling
 * SQS retry behavior
-* Redrive policy
+* Redrive policy operation
 * DLQ routing
 * Failed-message isolation
 
-The test message was deleted after validation and the DLQ was returned to an empty state.
+The test message was removed after validation and the DLQ was returned to an empty state.
 
 ---
 
 ## Security
 
-The project includes multiple AWS security controls.
+The project implements multiple AWS security controls.
 
 ### Amazon Cognito
 
 The API is protected by an Amazon Cognito User Pool.
-
-Authentication flow:
 
 ```text
 User
@@ -301,13 +422,17 @@ JWT Token
  |
  v
 API Gateway
+ |
+ +---- POST /orders
+ |
+ `---- GET /orders
 ```
 
-API Gateway validates the JWT before invoking the Create Order Lambda.
+Both API operations require authenticated access.
 
 ---
 
-### Optional MFA
+### Optional TOTP MFA
 
 Software-token MFA is enabled using:
 
@@ -315,7 +440,7 @@ Software-token MFA is enabled using:
 TOTP
 ```
 
-MFA configuration:
+Configuration:
 
 ```text
 OPTIONAL
@@ -337,13 +462,13 @@ Configured token lifetimes:
 
 User-existence error protection is enabled.
 
-Email changes require verification before the new email becomes active.
+Email changes require verification before the updated address becomes active.
 
 ---
 
 ### Password Policy
 
-Cognito password requirements include:
+The Cognito password policy requires:
 
 * Minimum 8 characters
 * Uppercase characters
@@ -355,7 +480,7 @@ Cognito password requirements include:
 
 ### API Gateway Throttling
 
-API throttling protects the endpoint against excessive requests.
+API Gateway throttling protects the application against excessive request rates.
 
 Configured limits:
 
@@ -364,72 +489,23 @@ Rate Limit: 10 requests/second
 Burst Limit: 20 requests
 ```
 
-CloudWatch API metrics are also enabled.
+CloudWatch API metrics are enabled.
 
 ---
 
-### SQS Encryption
+### Request Validation
 
-Both queues have Amazon SQS managed server-side encryption enabled:
+API Gateway validates incoming `POST /orders` request bodies.
 
-```text
-serverless-order-queue
-serverless-order-dlq
-```
-
----
-
-### DynamoDB Protection
-
-The DynamoDB table has:
-
-* Server-side encryption
-* Point-in-Time Recovery
-* On-demand capacity
-
-This provides data-at-rest protection and recovery capabilities.
-
----
-
-### IAM Least Privilege
-
-Application Lambda functions use restricted IAM permissions.
-
-The Create Order Lambda receives permission to:
-
-```text
-sqs:SendMessage
-```
-
-against the required order queue.
-
-The Process Order Lambda receives permission to:
-
-```text
-dynamodb:PutItem
-```
-
-against the required DynamoDB table.
-
-This reduces unnecessary application permissions.
-
----
-
-## Request Validation
-
-API Gateway performs request-body validation before invoking the application.
-
-The order model requires:
+Required properties include:
 
 * `customer_name`
 * `customer_email`
 * `items`
 
-For example, a request missing `customer_name` is rejected by API Gateway.
+Additional business validation is performed by Lambda.
 
-Additional business validation is performed inside Lambda.
-
-This creates two validation layers:
+This provides two validation layers:
 
 ```text
 API Gateway Validation
@@ -447,7 +523,52 @@ Lambda validates:
 * Quantity
 * Price
 
-This is important because some JSON Schema constraints are not fully enforced by API Gateway's request-model implementation.
+---
+
+### SQS Encryption
+
+Server-side encryption is enabled for:
+
+```text
+serverless-order-queue
+serverless-order-dlq
+```
+
+---
+
+### DynamoDB Protection
+
+The DynamoDB table uses:
+
+* Server-side encryption
+* Point-in-Time Recovery
+* On-demand capacity
+
+---
+
+### IAM Least Privilege
+
+The Lambda functions use restricted IAM permissions.
+
+**Create Order Lambda**
+
+```text
+sqs:SendMessage
+```
+
+**Process Order Lambda**
+
+```text
+dynamodb:PutItem
+```
+
+**Get Orders Lambda**
+
+```text
+dynamodb:Scan
+```
+
+Each function receives only the application permissions required for its responsibility.
 
 ---
 
@@ -461,7 +582,7 @@ Log group:
 /aws/apigateway/serverless-order-api
 ```
 
-Access logs capture information including:
+Logs capture information including:
 
 * Request ID
 * Source IP
@@ -474,19 +595,28 @@ Access logs capture information including:
 * Integration latency
 * Integration errors
 
-Example:
+Both `POST` and `GET` API activity can therefore be monitored through CloudWatch.
 
-```json
-{
-  "httpMethod": "POST",
-  "resourcePath": "/orders",
-  "status": "202",
-  "responseLatency": "895",
-  "integrationLatency": "841"
-}
+---
+
+## CloudWatch Logs
+
+Application and API logs are available under:
+
+```text
+/aws/lambda/serverless-create-order
+/aws/lambda/serverless-process-order
+/aws/lambda/serverless-get-orders
+/aws/apigateway/serverless-order-api
 ```
 
-API Gateway uses an account-level CloudWatch Logs IAM role in the deployment region.
+Logs support:
+
+* Troubleshooting
+* Request tracing
+* Error investigation
+* Performance analysis
+* Operational monitoring
 
 ---
 
@@ -494,25 +624,40 @@ API Gateway uses an account-level CloudWatch Logs IAM role in the deployment reg
 
 Amazon CloudWatch provides centralized monitoring for the application.
 
-The project contains **seven CloudWatch alarms**.
+The deployed project contains **8 CloudWatch alarms**.
 
 ### CloudWatch Alarms
 
-1. Process Order Lambda errors
-2. Create Order Lambda errors
-3. DLQ messages detected
-4. Main queue backlog
-5. API Gateway 5XX errors
-6. API Gateway 4XX errors
-7. API Gateway high latency
+1. Create Order Lambda errors
+2. Process Order Lambda errors
+3. Get Orders Lambda errors
+4. DLQ messages detected
+5. Main SQS queue backlog
+6. API Gateway 5XX errors
+7. API Gateway 4XX errors
+8. API Gateway high latency
 
-These alarms provide visibility across the API, Lambda, SQS, and failure-processing layers.
+The Get Orders Lambda alarm is:
+
+```text
+serverless-get-orders-errors
+```
+
+The alarm was successfully deployed and verified in:
+
+```text
+OK
+```
+
+state.
+
+These alarms provide monitoring across the API, compute, messaging, retrieval, and failure-handling layers.
 
 ---
 
 ## SNS Notifications
 
-CloudWatch alarms publish notifications to an Amazon SNS topic.
+CloudWatch alarms publish operational notifications through Amazon SNS.
 
 ```text
 CloudWatch Alarm
@@ -524,7 +669,7 @@ CloudWatch Alarm
 Operational Alert
 ```
 
-This allows operational problems to generate notifications rather than relying solely on manual dashboard monitoring.
+This allows infrastructure and application problems to generate notifications instead of relying solely on manual monitoring.
 
 ---
 
@@ -538,7 +683,7 @@ Dashboard:
 serverless-order-processing-dashboard
 ```
 
-The dashboard includes widgets for:
+The dashboard provides centralized visibility into application health and can include metrics for:
 
 * API Gateway requests
 * API Gateway errors
@@ -546,30 +691,8 @@ The dashboard includes widgets for:
 * Lambda invocations
 * Lambda errors
 * SQS queue depth
-* Dead-Letter Queue messages
+* DLQ messages
 * DynamoDB activity
-
-This provides a centralized operational view of the application.
-
----
-
-## CloudWatch Logs
-
-Application logs are available under:
-
-```text
-/aws/lambda/serverless-create-order
-/aws/lambda/serverless-process-order
-/aws/apigateway/serverless-order-api
-```
-
-Logs are useful for:
-
-* Troubleshooting
-* Request tracing
-* Error investigation
-* Performance analysis
-* Operational monitoring
 
 ---
 
@@ -579,23 +702,26 @@ The AWS infrastructure is defined using:
 
 **AWS Serverless Application Model (SAM)**
 
-The main infrastructure template is:
+Main template:
 
 ```text
 template.yaml
 ```
 
-AWS SAM deploys resources through AWS CloudFormation.
+AWS SAM deploys the infrastructure through AWS CloudFormation.
 
-Infrastructure managed by the project includes:
+Managed resources include:
 
 * Cognito User Pool
 * Cognito App Client
-* API Gateway
-* Lambda functions
+* API Gateway REST API
+* Cognito API Authorizer
+* Create Order Lambda
+* Process Order Lambda
+* Get Orders Lambda
 * Lambda IAM roles
 * Lambda permissions
-* SQS queue
+* SQS order queue
 * SQS Dead-Letter Queue
 * SQS event source mapping
 * DynamoDB table
@@ -603,7 +729,9 @@ Infrastructure managed by the project includes:
 * CloudWatch dashboard
 * API Gateway access log group
 * SNS topic
-* SNS subscription
+* SNS email subscription
+
+Infrastructure changes can therefore be validated, version-controlled, reviewed, and reproduced.
 
 ---
 
@@ -624,7 +752,7 @@ Configure AWS credentials:
 aws configure
 ```
 
-The project was developed in:
+AWS region used by the project:
 
 ```text
 af-south-1
@@ -632,7 +760,9 @@ af-south-1
 
 ---
 
-### Validate the Template
+### Validate the SAM Template
+
+Before deployment:
 
 ```powershell
 sam validate --template-file template.yaml --lint
@@ -648,39 +778,68 @@ template.yaml is a valid SAM Template
 
 ### Build
 
+Build the application:
+
 ```powershell
 sam build
 ```
 
-The Lambda functions do not currently require third-party Python dependencies, so SAM may report that `requirements.txt` was not found.
+Expected result:
 
-That message is expected for the current application.
+```text
+Build Succeeded
+```
+
+The Lambda functions currently have no third-party Python dependencies.
+
+SAM may therefore display:
+
+```text
+requirements.txt file not found. Continuing the build without dependencies.
+```
+
+This is expected for the current implementation.
 
 ---
 
-### Deploy
+### Initial Deployment
 
-For the initial deployment:
+For a new environment:
 
 ```powershell
 sam deploy --guided
 ```
 
-For subsequent deployments:
+---
+
+### Subsequent Deployment
+
+The stack requires the operational alert email parameter.
+
+Example:
 
 ```powershell
-sam deploy
+sam deploy `
+  --parameter-overrides AlertEmail=<YOUR_EMAIL_ADDRESS>
+```
+
+The deployed CloudFormation stack is:
+
+```text
+serverless-order-processing
+```
+
+Region:
+
+```text
+af-south-1
 ```
 
 ---
 
 ## Testing
 
-The project contains automated Python unit tests using:
-
-```text
-pytest
-```
+The project uses **pytest** for automated Python unit testing.
 
 Tests are located under:
 
@@ -688,52 +847,91 @@ Tests are located under:
 tests/
 ```
 
-Run them with:
+Run the complete test suite:
 
 ```powershell
 python -m pytest -v
 ```
 
-Current test suite:
+Current result:
 
 ```text
-8 tests
+13 passed
 ```
 
-The tests cover both Lambda functions.
+The tests cover all three application Lambda functions.
 
 ---
 
 ### Create Order Tests
 
-Tests verify:
+The Create Order test suite verifies:
 
 * Valid order returns HTTP 202
-* Order status is `QUEUED`
-* Generated order IDs start with `ORD-`
-* SQS `send_message` is called
+* SQS message is published
 * Missing customer name returns HTTP 400
-* Empty item lists return HTTP 400
+* Empty items return HTTP 400
 * Invalid JSON returns HTTP 400
+
+---
+
+### Get Orders Tests
+
+The Get Orders test suite verifies:
+
+* Successful retrieval returns HTTP 200
+* Empty DynamoDB table returns an empty list
+* Orders are sorted newest first
+* DynamoDB pagination is handled
+* DynamoDB failures return HTTP 500
 
 ---
 
 ### Process Order Tests
 
-Tests verify:
+The Process Order test suite verifies:
 
 * Valid orders are written to DynamoDB
-* Completed status is applied
-* Decimal values are supported
-* Missing `order_id` raises an error
+* Missing `order_id` raises `ValueError`
 * Invalid JSON raises a JSON parsing error
 * Multiple SQS records are processed
 
-Current result:
+---
+
+## Deployed API Validation
+
+The deployed `GET /orders` operation was tested with a valid Cognito token.
+
+Example PowerShell request:
+
+```powershell
+$response = Invoke-RestMethod `
+    -Method GET `
+    -Uri $apiUrl `
+    -Headers $headers
+```
+
+The deployed endpoint successfully returned:
 
 ```text
-8 passed
+Order count: 6
 ```
+
+An unauthenticated request was also tested:
+
+```powershell
+Invoke-RestMethod `
+    -Method GET `
+    -Uri $apiUrl
+```
+
+API Gateway correctly rejected the request:
+
+```text
+Unauthorized
+```
+
+This verifies that the retrieval endpoint is protected by Cognito authentication.
 
 ---
 
@@ -752,7 +950,7 @@ The workflow runs when:
 * Code is pushed to `main`
 * A pull request targets `main`
 
-CI pipeline:
+Pipeline:
 
 ```text
 Git Push
@@ -764,10 +962,10 @@ GitHub Actions
 Python 3.13
    |
    v
-Install pytest + boto3
+Install Test Dependencies
    |
    v
-Unit Tests
+13 Unit Tests
    |
    v
 SAM Validation
@@ -776,19 +974,27 @@ SAM Validation
 SAM Build
 ```
 
-The pipeline automatically checks that application code and infrastructure remain buildable.
+The CI pipeline ensures both application code and infrastructure remain testable and buildable.
 
 ---
 
 ## GitHub Actions Test Environment
 
-Unit tests use non-production AWS environment variables in GitHub Actions.
+The GitHub Actions unit-test environment uses non-production AWS environment variables.
 
-These include test-only credentials and resource names.
+Example test configuration includes:
 
-The unit tests mock AWS service calls and therefore do not require production AWS credentials.
+```text
+AWS_DEFAULT_REGION=af-south-1
+AWS_REGION=af-south-1
+AWS_ACCESS_KEY_ID=testing
+AWS_SECRET_ACCESS_KEY=testing
+ORDERS_TABLE=TestOrders
+```
 
-No production AWS access keys are stored in the repository.
+AWS service interactions are mocked during unit testing.
+
+Production AWS credentials are not stored in the repository.
 
 ---
 
@@ -805,6 +1011,9 @@ serverless-order-processing/
 |   |-- create_order/
 |   |   `-- app.py
 |   |
+|   |-- get_orders/
+|   |   `-- app.py
+|   |
 |   `-- process_order/
 |       `-- app.py
 |
@@ -814,20 +1023,22 @@ serverless-order-processing/
 |
 |-- tests/
 |   |-- test_create_order.py
+|   |-- test_get_orders.py
 |   `-- test_process_order.py
 |
 |-- .gitignore
 |-- README.md
+|-- samconfig.toml
 `-- template.yaml
 ```
 
-Local SAM build artifacts and development files are excluded through `.gitignore`.
+Local SAM build artifacts, Python caches, virtual environments, and other development files are excluded through `.gitignore`.
 
 ---
 
 ## Troubleshooting and Lessons Learned
 
-This project included practical troubleshooting scenarios that commonly occur in real AWS environments.
+This project included several practical troubleshooting scenarios commonly encountered in AWS engineering.
 
 ### DynamoDB Float Error
 
@@ -837,156 +1048,237 @@ An early Lambda execution produced:
 TypeError: Float types are not supported. Use Decimal types instead.
 ```
 
-DynamoDB's Python SDK requires `Decimal` rather than Python floating-point values.
+The DynamoDB Python SDK requires `Decimal` rather than Python floating-point values.
 
-The processor was updated to parse JSON floating-point numbers using `Decimal`.
+The processing function was updated to handle numeric values correctly.
+
+---
+
+### DynamoDB Decimal JSON Serialization
+
+The Get Orders Lambda retrieves numeric data from DynamoDB as `Decimal` objects.
+
+Standard `json.dumps()` cannot directly serialize these values.
+
+A custom JSON encoder was implemented to convert DynamoDB decimals to JSON-compatible integer or floating-point values.
+
+---
+
+### DynamoDB Pagination
+
+A DynamoDB `Scan` operation may not return the entire table in one response.
+
+The Get Orders Lambda therefore checks for:
+
+```text
+LastEvaluatedKey
+```
+
+and continues scanning until all result pages have been retrieved.
+
+A dedicated unit test verifies this behavior.
 
 ---
 
 ### Invalid SQS JSON
 
-Malformed SQS test messages produced JSON parsing errors such as:
+Malformed SQS test messages generated JSON parsing errors.
 
-```text
-JSONDecodeError: Expecting property name enclosed in double quotes
-```
-
-This demonstrated the importance of correct JSON escaping when sending messages through PowerShell and the AWS CLI.
+This demonstrated the importance of correct JSON formatting and escaping when using PowerShell and the AWS CLI.
 
 ---
 
 ### API Authentication
 
-Requests without a valid Cognito JWT correctly returned:
+Requests without a valid Cognito JWT correctly return:
 
 ```text
 Unauthorized
 ```
 
-Expired Cognito tokens also caused authentication failures.
+Expired tokens also cause authentication failures.
 
-Generating a fresh ID token restored authenticated API access.
+Obtaining a fresh Cognito ID token restores authenticated access.
 
 ---
 
 ### API Gateway CloudWatch Logging
 
-API Gateway access logging initially failed during deployment because the AWS account did not have an API Gateway CloudWatch Logs role configured.
+API Gateway access logging initially failed because an account-level API Gateway CloudWatch Logs IAM role had not been configured in the AWS region.
 
-An API Gateway CloudWatch Logs IAM role was created and configured at the regional account level.
-
-After configuration, SAM deployment succeeded and API access logs were delivered to CloudWatch.
-
-This account-level setting is a deployment prerequisite rather than an application-specific Lambda permission.
+After configuring the regional API Gateway CloudWatch Logs role, SAM deployment and access logging succeeded.
 
 ---
 
 ### Request Validation
 
-API Gateway correctly rejected requests missing required properties.
+API Gateway correctly rejects requests missing required properties.
 
-However, some JSON Schema constraints such as an empty-array `minItems` rule were not enforced as expected by the API Gateway model.
+Additional Lambda validation is still used for business rules and constraints.
 
-Lambda therefore performs additional business validation.
-
-This provides defense in depth.
+This creates defense in depth between the API and application layers.
 
 ---
 
 ### SQS Retry and DLQ Testing
 
-A deliberately invalid message was used to verify retry behavior.
+A deliberately invalid message was used to test failure recovery.
 
 The message:
 
 1. Entered the main SQS queue
-2. Triggered the processor
+2. Triggered Process Order Lambda
 3. Failed processing
 4. Was automatically retried
 5. Reached the configured receive limit
-6. Was transferred to the DLQ
+6. Was moved to the Dead-Letter Queue
 
-This validated the application's failure-recovery architecture.
+This validated the application's asynchronous failure-handling architecture.
 
 ---
 
-### SAM Template Editing
+### SAM YAML Formatting
 
-Several YAML formatting issues were encountered while modifying the SAM template.
+YAML indentation and accidental Markdown code fences caused SAM parsing errors while the infrastructure template was being updated.
 
-These reinforced the importance of running:
+Examples included:
+
+```text
+found character '`' that cannot start any token
+```
+
+and:
+
+```text
+mapping values are not allowed here
+```
+
+Running:
 
 ```powershell
 sam validate --template-file template.yaml --lint
 ```
 
-before building or deploying infrastructure changes.
+before every build and deployment became an important validation step.
+
+---
+
+### Required CloudFormation Parameters
+
+A deployment initially failed with:
+
+```text
+Parameters: [AlertEmail] must have values
+```
+
+The deployment was corrected by supplying the required parameter:
+
+```powershell
+sam deploy `
+  --parameter-overrides AlertEmail=<YOUR_EMAIL_ADDRESS>
+```
+
+---
+
+### CloudFormation Early Validation
+
+A deployment change set also encountered:
+
+```text
+AWS::EarlyValidation::ResourceExistenceCheck
+```
+
+Existing CloudFormation-managed resources were inspected before correcting the template and redeploying.
+
+This reinforced the importance of understanding resource ownership when modifying existing infrastructure.
 
 ---
 
 ### GitHub Actions AWS Region
 
-The first CI execution failed with:
+The initial CI test run failed with:
 
 ```text
 NoRegionError: You must specify a region.
 ```
 
-The test environment was updated with a non-production AWS region and mock AWS credentials.
+This occurred because boto3 clients were created during test collection without an AWS region configured.
 
-The workflow subsequently passed.
+The GitHub Actions workflow was updated with a test AWS region and mock credentials.
+
+The pipeline subsequently passed.
+
+---
+
+### CloudWatch Alarm Initial State
+
+The new Get Orders Lambda alarm initially reported:
+
+```text
+INSUFFICIENT_DATA
+```
+
+After the Lambda endpoint generated metrics, CloudWatch evaluated the alarm and transitioned it to:
+
+```text
+OK
+```
+
+This demonstrated normal CloudWatch alarm lifecycle behavior for newly created metrics.
 
 ---
 
 ### Infrastructure Ownership
 
-Monitoring resources were initially tested manually and later recreated through AWS SAM.
+Monitoring resources were initially tested manually and later represented through AWS SAM.
 
-This ensures the application infrastructure is reproducible and managed through CloudFormation rather than depending on undocumented manual resources.
+Managing infrastructure through CloudFormation makes the environment reproducible and reduces undocumented manual configuration.
 
 ---
 
 ## Reliability Features
 
-The architecture includes several reliability mechanisms:
+The application demonstrates:
 
+* Event-driven architecture
 * Asynchronous SQS processing
 * Lambda automatic scaling
-* SQS retries
-* Dead-Letter Queue
+* SQS retry handling
+* Dead-Letter Queue isolation
 * DynamoDB Point-in-Time Recovery
+* DynamoDB pagination handling
 * CloudWatch monitoring
-* CloudWatch alarms
+* 8 CloudWatch alarms
 * SNS operational notifications
 * Infrastructure as Code
 * Automated unit testing
-* CI validation
+* GitHub Actions CI
 
 ---
 
 ## Security Features
 
-Security controls demonstrated by the project include:
+Security controls include:
 
-* Cognito authentication
-* JWT-protected API
+* Amazon Cognito authentication
+* JWT-protected REST API
+* Protected `POST /orders`
+* Protected `GET /orders`
 * Optional TOTP MFA
 * Strong password policy
 * Verified email changes
-* Reduced token lifetime
+* Limited token lifetimes
 * API throttling
 * API request validation
 * SQS server-side encryption
 * DynamoDB encryption
 * IAM least privilege
-* CloudWatch access logging
+* API access logging
 * No production credentials committed to Git
 
 ---
 
 ## Skills Demonstrated
-
-This project demonstrates practical experience with:
 
 ### AWS
 
@@ -1003,12 +1295,13 @@ This project demonstrates practical experience with:
 
 ### Development
 
-* Python
+* Python 3.13
 * boto3
 * JSON
 * REST APIs
 * Event-driven architecture
 * Asynchronous processing
+* Pagination
 * Exception handling
 * Unit testing
 * pytest
@@ -1018,16 +1311,17 @@ This project demonstrates practical experience with:
 * Git
 * GitHub
 * GitHub Actions
-* CI pipelines
+* Continuous Integration
 * Infrastructure as Code
 * Automated SAM validation
 * Automated SAM builds
+* CloudFormation deployments
 
 ### Security
 
 * JWT authentication
 * Cognito authorization
-* MFA
+* TOTP MFA
 * IAM least privilege
 * Encryption at rest
 * API throttling
@@ -1043,6 +1337,7 @@ This project demonstrates practical experience with:
 * SNS notifications
 * SQS retry policies
 * Dead-Letter Queues
+* API access logging
 * Troubleshooting distributed AWS applications
 
 ---
@@ -1051,65 +1346,48 @@ This project demonstrates practical experience with:
 
 Potential future improvements include:
 
-* `GET /orders` endpoint
-* Retrieve individual orders by ID
-* Cognito groups and role-based authorization
+* `GET /orders/{order_id}` endpoint
 * Order status updates
 * Order cancellation
-* DynamoDB indexes
+* DynamoDB Global Secondary Indexes
+* Query-based order retrieval instead of table scans
+* Pagination tokens for the public API
+* Cognito groups and role-based authorization
 * Amazon SES customer notifications
 * AWS X-Ray distributed tracing
 * AWS WAF protection
-* Custom domain name
-* Automated deployment pipeline
-* Separate development and production environments
-* Desktop client application
+* API custom domain
+* Automated CD deployment pipeline
+* Separate development, staging, and production environments
 * Front-end web application
+* Desktop client application
 * CloudWatch custom business metrics
 
 ---
 
 ## Project Status
 
-Core backend architecture:
-
-**Complete**
-
-Authentication:
-
-**Complete**
-
-Security hardening:
-
-**Complete**
-
-Monitoring and alerting:
-
-**Complete**
-
-CloudWatch dashboard:
-
-**Complete**
-
-SQS retry and DLQ validation:
-
-**Complete**
-
-Infrastructure as Code:
-
-**Complete**
-
-Unit testing:
-
-**Complete**
-
-GitHub Actions CI:
-
-**Complete**
-
-Architecture documentation:
-
-**Complete**
+| Component                     | Status   |
+| ----------------------------- | -------- |
+| Core backend architecture     | Complete |
+| `POST /orders`                | Complete |
+| Asynchronous order processing | Complete |
+| `GET /orders`                 | Complete |
+| Cognito authentication        | Complete |
+| Optional MFA                  | Complete |
+| DynamoDB persistence          | Complete |
+| SQS retry handling            | Complete |
+| Dead-Letter Queue             | Complete |
+| Security hardening            | Complete |
+| API request validation        | Complete |
+| Monitoring and alerting       | Complete |
+| 8 CloudWatch alarms           | Complete |
+| CloudWatch dashboard          | Complete |
+| SNS notifications             | Complete |
+| Infrastructure as Code        | Complete |
+| 13 automated tests            | Complete |
+| GitHub Actions CI             | Complete |
+| Architecture documentation    | Complete |
 
 ---
 
@@ -1124,4 +1402,4 @@ AWS Cloud Engineer & IT Professional
 * AWS Certified Solutions Architect – Associate
 * A+ Certified
 
-This project forms part of my practical AWS cloud engineering portfolio.
+This project forms part of my practical AWS Cloud Engineering portfolio.
