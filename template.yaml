@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+﻿AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: >
@@ -884,6 +884,115 @@ Resources:
             }
           ]
         }
+
+
+  # =======================================================
+  # AWS WAF WEB ACL
+  # PROTECTS REGIONAL API GATEWAY
+  # =======================================================
+
+  OrderWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: serverless-order-api-waf
+      Description: "AWS WAF protection for the Serverless Order Processing API."
+      Scope: REGIONAL
+
+      DefaultAction:
+        Allow: {}
+
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: serverless-order-api-waf
+        SampledRequestsEnabled: true
+
+      Rules:
+
+        # ---------------------------------------------------
+        # AWS MANAGED COMMON RULE SET
+        # ---------------------------------------------------
+
+        - Name: AWSManagedRulesCommonRuleSet
+          Priority: 0
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-managed-common-rules
+            SampledRequestsEnabled: true
+
+        # ---------------------------------------------------
+        # AWS MANAGED KNOWN BAD INPUTS
+        # ---------------------------------------------------
+
+        - Name: AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-managed-known-bad-inputs
+            SampledRequestsEnabled: true
+
+        # ---------------------------------------------------
+        # AMAZON IP REPUTATION LIST
+        # ---------------------------------------------------
+
+        - Name: AWSManagedRulesAmazonIpReputationList
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-managed-ip-reputation
+            SampledRequestsEnabled: true
+
+        # ---------------------------------------------------
+        # RATE-BASED PROTECTION
+        #
+        # Blocks an IP when it exceeds 500 requests during
+        # the WAF rate evaluation window.
+        # ---------------------------------------------------
+
+        - Name: ApiRateLimit
+          Priority: 3
+          Action:
+            Block: {}
+          Statement:
+            RateBasedStatement:
+              Limit: 500
+              AggregateKeyType: IP
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: serverless-order-api-rate-limit
+            SampledRequestsEnabled: true
+
+  # =======================================================
+  # WAF ASSOCIATION
+  # WEB ACL -> API GATEWAY PROD STAGE
+  # =======================================================
+
+  OrderWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn:
+      - OrderApiProdStage
+    Properties:
+      WebACLArn: !GetAtt OrderWebACL.Arn
+      ResourceArn: !Sub
+        - "arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${ApiId}/stages/Prod"
+        - ApiId: !Ref OrderApi
 
 Outputs:
 
