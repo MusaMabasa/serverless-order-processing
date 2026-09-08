@@ -302,6 +302,37 @@ Resources:
             Method: GET
 
   # =======================================================
+  # UPDATE ORDER LAMBDA
+  # PATCH /orders/{order_id}
+  # =======================================================
+
+  UpdateOrderFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: serverless-update-order
+      CodeUri: backend/update_order/
+      Handler: app.lambda_handler
+
+      Environment:
+        Variables:
+          ORDERS_TABLE: !Ref OrdersTable
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+              Resource: !GetAtt OrdersTable.Arn
+
+      Events:
+        UpdateOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /orders/{order_id}
+            Method: PATCH
+
+  # =======================================================
   # PROCESS ORDER LAMBDA
   # SQS -> LAMBDA -> DYNAMODB
   # =======================================================
@@ -415,6 +446,31 @@ Resources:
       Dimensions:
         - Name: FunctionName
           Value: serverless-get-order
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      DatapointsToAlarm: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref OrderAlertsTopic
+
+  # =======================================================
+  # UPDATE ORDER LAMBDA ERROR ALARM
+  # =======================================================
+
+  UpdateOrderErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: serverless-update-order-errors
+      AlarmDescription: >
+        Alarm when the Update Order Lambda function reports errors.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: serverless-update-order
       Statistic: Sum
       Period: 60
       EvaluationPeriods: 1
@@ -866,6 +922,10 @@ Outputs:
   GetOrderFunctionName:
     Description: Get Single Order Lambda function
     Value: !Ref GetOrderFunction
+
+  UpdateOrderFunctionName:
+    Description: Update Order Lambda function
+    Value: !Ref UpdateOrderFunction
 
   CreateOrderFunctionName:
     Description: Create Order Lambda function
