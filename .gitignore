@@ -37,3 +37,9 @@ order-recovery.json
 apigateway-cloudwatch-trust.json
 
 README.backup.md
+
+README.before-single-order.md
+docs/architecture.before-single-order.md
+
+README.before-single-order.md
+docs/architecture.before-single-order.md
