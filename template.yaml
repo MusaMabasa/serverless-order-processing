@@ -966,8 +966,20 @@ Resources:
         # the WAF rate evaluation window.
         # ---------------------------------------------------
 
-        - Name: ApiRateLimit
+        - Name: AWSManagedRulesSQLiRuleSet
           Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: aws-managed-sqli-rules
+            SampledRequestsEnabled: true
+        - Name: ApiRateLimit
+          Priority: 4
           Action:
             Block: {}
           Statement:
@@ -1055,3 +1067,4 @@ Outputs:
   DashboardName:
     Description: CloudWatch dashboard
     Value: serverless-order-processing-dashboard
+
