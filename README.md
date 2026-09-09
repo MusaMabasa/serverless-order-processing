@@ -10,7 +10,7 @@ The project demonstrates practical AWS Cloud Engineering skills across REST API 
 
 ![Serverless Order Processing Architecture](docs/architecture.png)
 
-The system supports three authenticated API operations:
+The system supports four authenticated API operations:
 
 ```text
 POST /orders
@@ -112,7 +112,7 @@ Git Push -> GitHub Actions -> 18 Tests -> SAM Validation -> SAM Build
 | ------------------ | ------------------------------------------ |
 | Amazon Cognito     | Authentication, JWT tokens, optional MFA   |
 | Amazon API Gateway | Authenticated REST API                     |
-| AWS Lambda         | Create, process, list, and retrieve orders |
+| AWS Lambda         | Create, process, list, retrieve, and update orders |
 | Amazon SQS         | Asynchronous order queue                   |
 | Amazon SQS DLQ     | Failed-message isolation                   |
 | Amazon DynamoDB    | Persistent order storage                   |
@@ -133,6 +133,7 @@ Git Push -> GitHub Actions -> 18 Tests -> SAM Validation -> SAM Build
 | `POST` | `/orders`            | Create a new order            |
 | `GET`  | `/orders`            | Retrieve all processed orders |
 | `GET`  | `/orders/{order_id}` | Retrieve one order by ID      |
+| `PATCH` | `/orders/{order_id}` | Update an order status        |
 
 All endpoints are protected by Amazon Cognito.
 
@@ -576,7 +577,7 @@ Relevant log groups include:
 
 ## Monitoring and Alerting
 
-The project now contains **9 CloudWatch alarms**.
+The project now contains **10 CloudWatch alarms**.
 
 ### Alarms
 
@@ -661,14 +662,14 @@ Managed resources include:
 * Cognito App Client
 * API Gateway
 * Cognito Authorizer
-* 4 Lambda functions
+* 5 Lambda functions
 * Lambda IAM roles
 * Lambda permissions
 * Main SQS queue
 * DLQ
 * SQS event source mapping
 * DynamoDB table
-* 9 CloudWatch alarms
+* 10 CloudWatch alarms
 * CloudWatch dashboard
 * API access log group
 * SNS topic
@@ -734,7 +735,7 @@ serverless-order-processing
 
 ## Automated Testing
 
-The project now has **18 passing pytest tests**.
+The project now has **27 passing pytest tests**.
 
 Run:
 
@@ -745,7 +746,7 @@ python -m pytest -v
 Expected:
 
 ```text
-18 passed
+27 passed
 ```
 
 ### Create Order Tests
@@ -813,7 +814,7 @@ GitHub Actions
 Python 3.13
    |
    v
-18 Unit Tests
+27 Unit Tests
    |
    v
 SAM Validation
@@ -972,7 +973,7 @@ demonstrates efficient primary-key access.
 * DynamoDB Point-in-Time Recovery
 * DynamoDB pagination support
 * CloudWatch monitoring
-* 9 CloudWatch alarms
+* 10 CloudWatch alarms
 * SNS notifications
 * Automated testing
 * GitHub Actions CI
@@ -1054,7 +1055,6 @@ Potential next improvements include:
 * Cognito groups and RBAC
 * Amazon SES notifications
 * AWS X-Ray
-* AWS WAF
 * API custom domain
 * Automated deployment pipeline
 * Dev/staging/prod environments
@@ -1078,11 +1078,11 @@ Potential next improvements include:
 | DLQ handling                | Complete |
 | API validation              | Complete |
 | Security hardening          | Complete |
-| 9 CloudWatch alarms         | Complete |
+| 10 CloudWatch alarms         | Complete |
 | CloudWatch dashboard        | Complete |
 | SNS notifications           | Complete |
 | Infrastructure as Code      | Complete |
-| 18 automated tests          | Complete |
+| 27 automated tests          | Complete |
 | GitHub Actions CI           | Complete |
 | Architecture documentation  | Complete |
 
@@ -1096,7 +1096,7 @@ AWS Cloud Engineer & IT Professional
 
 * BSc in IT Management
 * AWS Certified Cloud Practitioner
-* AWS Certified Solutions Architect – Associate
+* AWS Certified Solutions Architect - Associate
 * A+ Certified
 
 This project forms part of my practical AWS Cloud Engineering portfolio.

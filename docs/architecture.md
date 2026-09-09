@@ -5,15 +5,19 @@ flowchart LR
 
     User["Client / User"]
 
+    WAF["AWS WAF<br/>Regional Web ACL<br/>Managed Rules<br/>SQLi Protection<br/>IP Reputation<br/>Rate Limit"]
+
     Cognito["Amazon Cognito<br/>Authentication<br/>JWT<br/>Optional TOTP MFA"]
 
-    APIGW["Amazon API Gateway<br/>POST /orders<br/>GET /orders<br/>GET /orders/{order_id}<br/>Cognito Authorizer<br/>Request Validation<br/>Throttling"]
+    APIGW["Amazon API Gateway<br/>POST /orders<br/>GET /orders<br/>GET /orders/{order_id}<br/>PATCH /orders/{order_id}<br/>Cognito Authorizer<br/>Request Validation<br/>Throttling"]
 
     CreateLambda["AWS Lambda<br/>Create Order<br/>Python 3.13"]
 
     GetOrdersLambda["AWS Lambda<br/>Get Orders<br/>Python 3.13"]
 
     GetOrderLambda["AWS Lambda<br/>Get Order<br/>Python 3.13"]
+
+    UpdateOrderLambda["AWS Lambda<br/>Update Order<br/>Python 3.13"]
 
     SQS["Amazon SQS<br/>serverless-order-queue<br/>SSE Enabled"]
 
@@ -29,8 +33,11 @@ flowchart LR
 
     SAM["AWS SAM / CloudFormation<br/>Infrastructure as Code"]
 
-    GitHub["GitHub Actions<br/>18 Unit Tests<br/>SAM Validate<br/>SAM Build"]
+    GitHub["GitHub Actions<br/>27 Unit Tests<br/>SAM Validate<br/>SAM Build"]
 
+
+    User -.->|"HTTPS Traffic"| WAF
+    WAF -.->|"Protects Prod Stage"| APIGW
 
     User -->|"Authenticate"| Cognito
     Cognito -->|"JWT"| User
@@ -52,6 +59,10 @@ flowchart LR
     APIGW -->|"GET /orders/{order_id}"| GetOrderLambda
     GetOrderLambda -->|"GetItem"| DynamoDB
 
+    User -->|"PATCH /orders/{order_id} + JWT"| APIGW
+    APIGW -->|"PATCH /orders/{order_id}"| UpdateOrderLambda
+    UpdateOrderLambda -->|"UpdateItem"| DynamoDB
+
 
     SQS -->|"Repeated Failures"| DLQ
 
@@ -60,6 +71,7 @@ flowchart LR
     CreateLambda -.->|"Logs / Metrics"| CloudWatch
     GetOrdersLambda -.->|"Logs / Metrics"| CloudWatch
     GetOrderLambda -.->|"Logs / Metrics"| CloudWatch
+    UpdateOrderLambda -.->|"Logs / Metrics"| CloudWatch
     ProcessLambda -.->|"Logs / Metrics"| CloudWatch
     SQS -.->|"Queue Metrics"| CloudWatch
     DLQ -.->|"DLQ Metrics"| CloudWatch
@@ -73,23 +85,26 @@ flowchart LR
     SAM -.-> CreateLambda
     SAM -.-> GetOrdersLambda
     SAM -.-> GetOrderLambda
+    SAM -.-> UpdateOrderLambda
     SAM -.-> SQS
     SAM -.-> ProcessLambda
     SAM -.-> DynamoDB
     SAM -.-> CloudWatch
     SAM -.-> SNS
+    SAM -.-> WAF
 
     GitHub -->|"CI Validation"| SAM
 ```
 
 ## API Operations
 
-The system supports three authenticated API operations:
+The system supports four authenticated API operations:
 
 ```text
-POST /orders
-GET  /orders
-GET  /orders/{order_id}
+POST  /orders
+GET   /orders
+GET   /orders/{order_id}
+PATCH /orders/{order_id}
 ```
 
 All routes are protected by the Amazon Cognito User Pool authorizer.
@@ -264,7 +279,7 @@ The table uses:
 
 Amazon CloudWatch provides centralized observability.
 
-The project now contains **9 CloudWatch alarms**:
+The project now contains **10 CloudWatch alarms**:
 
 1. Create Order Lambda errors
 2. Process Order Lambda errors
@@ -306,6 +321,7 @@ Relevant log groups include:
 /aws/lambda/serverless-process-order
 /aws/lambda/serverless-get-orders
 /aws/lambda/serverless-get-order
+/aws/lambda/serverless-update-order
 /aws/apigateway/serverless-order-api
 ```
 
@@ -327,14 +343,14 @@ Managed infrastructure includes:
 * Cognito App Client
 * API Gateway
 * Cognito Authorizer
-* 4 Lambda functions
+* 5 Lambda functions
 * Lambda IAM roles
 * Lambda permissions
 * SQS queue
 * SQS DLQ
 * SQS event source mapping
 * DynamoDB table
-* 9 CloudWatch alarms
+* 10 CloudWatch alarms
 * CloudWatch dashboard
 * API access log group
 * SNS topic
@@ -347,7 +363,7 @@ Managed infrastructure includes:
 The current test suite contains:
 
 ```text
-18 tests
+27 tests
 ```
 
 Test files:
@@ -378,7 +394,7 @@ Coverage includes:
 Current result:
 
 ```text
-18 passed
+27 passed
 ```
 
 ---
@@ -397,7 +413,7 @@ GitHub Actions
 Python 3.13
    |
    v
-18 Unit Tests
+27 Unit Tests
    |
    v
 SAM Validation
@@ -423,7 +439,7 @@ The architecture demonstrates:
 * DynamoDB pagination handling
 * Efficient `GetItem` retrieval
 * CloudWatch monitoring
-* 9 CloudWatch alarms
+* 10 CloudWatch alarms
 * SNS notifications
 * Automated tests
 * CI validation
