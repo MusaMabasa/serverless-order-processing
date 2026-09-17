@@ -13,9 +13,10 @@ The project demonstrates practical AWS Cloud Engineering skills across REST API 
 The system supports four authenticated API operations:
 
 ```text
-POST /orders
-GET  /orders
-GET  /orders/{order_id}
+POST  /orders
+GET   /orders
+GET   /orders/{order_id}
+PATCH /orders/{order_id}
 ```
 
 ### Create Order Flow
@@ -99,7 +100,7 @@ AWS Services -> CloudWatch -> SNS -> Email Alerts
 ### CI Pipeline
 
 ```text
-Git Push -> GitHub Actions -> 18 Tests -> SAM Validation -> SAM Build
+Git Push -> GitHub Actions -> 32 Tests -> SAM Validation -> SAM Build
 ```
 
 [View detailed architecture](docs/architecture.md)
@@ -733,9 +734,29 @@ serverless-order-processing
 
 ---
 
+## Flutter Frontend
+
+The project includes a Flutter application in `frontend/order_app/`.
+
+The frontend provides Cognito sign-in, an order dashboard, order creation, and authenticated API requests. It supports Flutter Web and includes a Windows desktop target.
+
+### Order creation and retry protection
+
+The Flutter client generates an `Idempotency-Key` for each new order submission. It retains the same key when retrying an unchanged order and clears the key after a successful submission or when the order details change.
+
+The backend uses a conditional DynamoDB reservation to prevent requests with the same key from publishing duplicate SQS messages.
+
+### Verified end-to-end flow
+
+A browser-created order, `ORD-342AFACD`, was successfully queued, processed, and confirmed as `COMPLETED` in DynamoDB.
+
+Duplicate protection was separately verified using order `ORD-DCB50CEA`: the first request returned HTTP 202, and the repeated request returned HTTP 200 with `idempotent_replay: true`. Only one SQS processing event was observed.
+
+---
+
 ## Automated Testing
 
-The project now has **27 passing pytest tests**.
+The backend project has **32 passing pytest tests**.
 
 Run:
 
@@ -746,7 +767,7 @@ python -m pytest -v
 Expected:
 
 ```text
-27 passed
+32 passed
 ```
 
 ### Create Order Tests
@@ -814,7 +835,7 @@ GitHub Actions
 Python 3.13
    |
    v
-27 Unit Tests
+32 Unit Tests
    |
    v
 SAM Validation
@@ -1048,7 +1069,6 @@ demonstrates efficient primary-key access.
 
 Potential next improvements include:
 
-* `PATCH /orders/{order_id}`
 * Order cancellation
 * DynamoDB Query-based list retrieval
 * API pagination tokens
@@ -1058,7 +1078,6 @@ Potential next improvements include:
 * API custom domain
 * Automated deployment pipeline
 * Dev/staging/prod environments
-* Front-end application
 * Desktop client
 * Business metrics
 

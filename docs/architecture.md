@@ -3,7 +3,7 @@
 ```mermaid
 flowchart LR
 
-    User["Client / User"]
+    User["Flutter Web Client<br/>Windows Target Available"]
 
     WAF["AWS WAF<br/>Regional Web ACL<br/>Managed Rules<br/>SQLi Protection<br/>IP Reputation<br/>Rate Limit"]
 
@@ -11,7 +11,7 @@ flowchart LR
 
     APIGW["Amazon API Gateway<br/>POST /orders<br/>GET /orders<br/>GET /orders/{order_id}<br/>PATCH /orders/{order_id}<br/>Cognito Authorizer<br/>Request Validation<br/>Throttling"]
 
-    CreateLambda["AWS Lambda<br/>Create Order<br/>Python 3.13"]
+    CreateLambda["AWS Lambda<br/>Create Order<br/>Python 3.13<br/>Idempotency Protection"]
 
     GetOrdersLambda["AWS Lambda<br/>Get Orders<br/>Python 3.13"]
 
@@ -27,13 +27,13 @@ flowchart LR
 
     DLQ["Amazon SQS DLQ<br/>serverless-order-dlq"]
 
-    CloudWatch["Amazon CloudWatch<br/>Logs / Metrics<br/>Dashboard / 9 Alarms"]
+    CloudWatch["Amazon CloudWatch<br/>Logs / Metrics<br/>Dashboard / 10 Alarms"]
 
     SNS["Amazon SNS<br/>Operational Alerts"]
 
     SAM["AWS SAM / CloudFormation<br/>Infrastructure as Code"]
 
-    GitHub["GitHub Actions<br/>27 Unit Tests<br/>SAM Validate<br/>SAM Build"]
+    GitHub["GitHub Actions<br/>32 Unit Tests<br/>SAM Validate<br/>SAM Build"]
 
 
     User -.->|"HTTPS Traffic"| WAF
@@ -45,6 +45,7 @@ flowchart LR
 
     User -->|"POST /orders + JWT"| APIGW
     APIGW -->|"POST /orders"| CreateLambda
+    CreateLambda -->|"Conditional PutItem: Reserve Order"| DynamoDB
     CreateLambda -->|"Send Message"| SQS
     SQS -->|"Event Source"| ProcessLambda
     ProcessLambda -->|"PutItem"| DynamoDB
@@ -117,11 +118,13 @@ All routes are protected by the Amazon Cognito User Pool authorizer.
 2. Cognito returns a JWT.
 3. The client sends `POST /orders`.
 4. API Gateway validates authentication and the request body.
-5. Create Order Lambda validates the order.
-6. Create Order Lambda sends the order to Amazon SQS.
-7. SQS asynchronously invokes Process Order Lambda.
-8. Process Order Lambda sets the order status to `COMPLETED`.
-9. The completed order is stored in DynamoDB.
+5. Create Order Lambda validates the order and reads the optional Idempotency-Key header.
+6. For requests with an idempotency key, Create Order Lambda generates a deterministic order ID and conditionally reserves it in DynamoDB.
+7. A repeated request using the same key returns the existing order without publishing another SQS message.
+8. Create Order Lambda sends new orders to Amazon SQS.
+9. SQS asynchronously invokes Process Order Lambda.
+10. Process Order Lambda sets the order status to `COMPLETED`.
+11. The completed order is stored in DynamoDB.
 
 ### IAM
 
@@ -129,6 +132,9 @@ Create Order Lambda:
 
 ```text
 sqs:SendMessage
+dynamodb:PutItem
+dynamodb:GetItem
+dynamodb:DeleteItem
 ```
 
 Process Order Lambda:
@@ -363,7 +369,7 @@ Managed infrastructure includes:
 The current test suite contains:
 
 ```text
-27 tests
+32 tests
 ```
 
 Test files:
@@ -394,7 +400,7 @@ Coverage includes:
 Current result:
 
 ```text
-27 passed
+32 passed
 ```
 
 ---
@@ -413,7 +419,7 @@ GitHub Actions
 Python 3.13
    |
    v
-27 Unit Tests
+32 Unit Tests
    |
    v
 SAM Validation
