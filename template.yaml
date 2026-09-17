@@ -152,8 +152,13 @@ Resources:
                     type: number
                     minimum: 0
 
+      Cors:
+        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
+        AllowOrigin: "'*'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt OrderUserPool.Arn
@@ -218,14 +223,19 @@ Resources:
       Environment:
         Variables:
           ORDER_QUEUE_URL: !Ref OrderQueue
-
+          ORDERS_TABLE: !Ref OrdersTable
       Policies:
         - Statement:
             - Effect: Allow
               Action:
                 - sqs:SendMessage
               Resource: !GetAtt OrderQueue.Arn
-
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:GetItem
+                - dynamodb:DeleteItem
+              Resource: !GetAtt OrdersTable.Arn
       Events:
         CreateOrderApi:
           Type: Api

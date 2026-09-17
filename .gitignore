@@ -43,3 +43,25 @@ docs/architecture.before-single-order.md
 
 README.before-single-order.md
 docs/architecture.before-single-order.md
+# Local backup files
+*.bak
+*.backup
+*.before-*.yaml
+frontend/order_app/backup/
+
+# Local AWS test payloads / responses
+cors-test-*.json
+get-orders-*.json
+idem-*.json
+orders-check.json
+
+# Flutter generated files
+frontend/order_app/.dart_tool/
+frontend/order_app/build/
+frontend/order_app/.flutter-plugins
+frontend/order_app/.flutter-plugins-dependencies
+frontend/order_app/.packages
+
+# Flutter IDE files
+frontend/order_app/.idea/
+frontend/order_app/*.iml
