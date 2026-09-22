@@ -379,26 +379,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      _SummaryCard(
-                        label: 'Total Orders',
-                        value: _orders.length.toString(),
-                        icon: Icons.shopping_cart_outlined,
-                      ),
-                      const SizedBox(width: 12),
-                      _SummaryCard(
-                        label: 'Completed',
-                        value: _completedOrders.toString(),
-                        icon: Icons.check_circle_outline,
-                      ),
-                      const SizedBox(width: 12),
-                      _SummaryCard(
-                        label: 'Processing',
-                        value: _processingOrders.toString(),
-                        icon: Icons.pending_actions_outlined,
-                      ),
-                    ],
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final narrow = constraints.maxWidth < 650;
+
+                      final cards = [
+                        _SummaryCard(
+                          label: 'Total Orders',
+                          value: _orders.length.toString(),
+                          icon: Icons.shopping_cart_outlined,
+                        ),
+                        _SummaryCard(
+                          label: 'Completed',
+                          value: _completedOrders.toString(),
+                          icon: Icons.check_circle_outline,
+                        ),
+                        _SummaryCard(
+                          label: 'Processing',
+                          value: _processingOrders.toString(),
+                          icon: Icons.pending_actions_outlined,
+                        ),
+                      ];
+
+                      if (narrow) {
+                        return Column(
+                          children: [
+                            for (final card in cards) ...[
+                              card,
+                              const SizedBox(height: 12),
+                            ],
+                          ],
+                        );
+                      }
+
+                      return Row(
+                        children: [
+                          for (var i = 0; i < cards.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 12),
+                            Expanded(child: cards[i]),
+                          ],
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 24),
                   Expanded(
@@ -515,31 +537,29 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Icon(icon),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(icon),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
-                    Text(label),
-                  ],
-                ),
+                  ),
+                  Text(label),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
