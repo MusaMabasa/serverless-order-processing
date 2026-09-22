@@ -5,12 +5,15 @@ import 'package:http/http.dart' as http;
 import '../config/app_config.dart';
 
 class OrderApiService {
+  OrderApiService({http.Client? client}) : _client = client ?? http.Client();
+
+  final http.Client _client;
   Future<List<Map<String, dynamic>>> getOrders({
     required String idToken,
   }) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}/orders');
 
-    final response = await http.get(
+    final response = await _client.get(
       uri,
       headers: {
         'Authorization': 'Bearer $idToken',
@@ -62,7 +65,7 @@ class OrderApiService {
       'items': items,
     };
 
-    final response = await http.post(
+    final response = await _client.post(
       uri,
       headers: {
         'Authorization': 'Bearer $idToken',
