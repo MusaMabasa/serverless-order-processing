@@ -238,64 +238,79 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
 
                         const SizedBox(height: 16),
 
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _quantityController,
-                                keyboardType: TextInputType.number,
-                                decoration: const InputDecoration(
-                                  labelText: 'Quantity',
-                                  prefixIcon: Icon(Icons.numbers_outlined),
-                                  border: OutlineInputBorder(),
-                                ),
-                                onChanged: (_) {
-                                  _markOrderChanged();
-                                  setState(() {});
-                                },
-                                validator: (value) {
-                                  final quantity = int.tryParse(value ?? '');
+                        LayoutBuilder(
+                          builder: (context, constraints) {
+                            final narrow = constraints.maxWidth < 500;
 
-                                  if (quantity == null || quantity < 1) {
-                                    return 'Minimum quantity is 1.';
-                                  }
-
-                                  return null;
-                                },
+                            final quantityField = TextFormField(
+                              controller: _quantityController,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                labelText: 'Quantity',
+                                prefixIcon: Icon(Icons.numbers_outlined),
+                                border: OutlineInputBorder(),
                               ),
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: TextFormField(
-                                controller: _priceController,
-                                keyboardType:
-                                    const TextInputType.numberWithOptions(
-                                      decimal: true,
-                                    ),
-                                decoration: const InputDecoration(
-                                  labelText: 'Price',
-                                  prefixText: 'R ',
-                                  prefixIcon: Icon(Icons.payments_outlined),
-                                  border: OutlineInputBorder(),
-                                ),
-                                onChanged: (_) {
-                                  _markOrderChanged();
-                                  setState(() {});
-                                },
-                                validator: (value) {
-                                  final price = double.tryParse(value ?? '');
+                              onChanged: (_) {
+                                _markOrderChanged();
+                                setState(() {});
+                              },
+                              validator: (value) {
+                                final quantity = int.tryParse(value ?? '');
 
-                                  if (price == null || price < 0) {
-                                    return 'Enter a valid price.';
-                                  }
+                                if (quantity == null || quantity < 1) {
+                                  return 'Minimum quantity is 1.';
+                                }
 
-                                  return null;
-                                },
+                                return null;
+                              },
+                            );
+
+                            final priceField = TextFormField(
+                              controller: _priceController,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Price',
+                                prefixText: 'R ',
+                                prefixIcon: Icon(Icons.payments_outlined),
+                                border: OutlineInputBorder(),
                               ),
-                            ),
-                          ],
+                              onChanged: (_) {
+                                _markOrderChanged();
+                                setState(() {});
+                              },
+                              validator: (value) {
+                                final price = double.tryParse(value ?? '');
+
+                                if (price == null || price < 0) {
+                                  return 'Enter a valid price.';
+                                }
+
+                                return null;
+                              },
+                            );
+
+                            if (narrow) {
+                              return Column(
+                                children: [
+                                  quantityField,
+                                  const SizedBox(height: 16),
+                                  priceField,
+                                ],
+                              );
+                            }
+
+                            return Row(
+                              children: [
+                                Expanded(child: quantityField),
+                                const SizedBox(width: 16),
+                                Expanded(child: priceField),
+                              ],
+                            );
+                          },
                         ),
-
                         const SizedBox(height: 24),
 
                         Container(
