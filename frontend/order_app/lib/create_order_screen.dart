@@ -55,14 +55,9 @@ class _CreateOrderScreenState extends State<CreateOrderScreen> {
       return;
     }
 
-    final token = widget.authService.idToken;
+    final token = await widget.authService.getValidIdToken();
 
-    if (token == null || token.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Authentication token is unavailable.')),
-      );
-      return;
-    }
+    if (!mounted) return;
 
     final quantity = int.parse(_quantityController.text);
     final price = double.parse(_priceController.text);

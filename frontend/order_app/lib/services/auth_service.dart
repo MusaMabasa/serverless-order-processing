@@ -38,8 +38,44 @@ class AuthService {
 
   bool get isSignedIn => _session?.isValid() ?? false;
 
+  Future<String> getValidIdToken() async {
+    if (_session?.isValid() ?? false) {
+      final token = _session?.idToken.jwtToken;
+
+      if (token != null && token.isNotEmpty) {
+        return token;
+      }
+    }
+
+    final user = _currentUser ?? await _userPool.getCurrentUser();
+
+    if (user == null) {
+      throw Exception('No authenticated user. Please sign in again.');
+    }
+
+    final session = await user.getSession();
+
+    if (session == null || !session.isValid()) {
+      throw Exception('Unable to restore authentication session.');
+    }
+
+    final token = session.idToken.jwtToken;
+
+    if (token == null || token.isEmpty) {
+      throw Exception('Authentication session does not contain an ID token.');
+    }
+
+    _currentUser = user;
+    _session = session;
+
+    return token;
+  }
+
   Future<void> signOut() async {
-    await _currentUser?.signOut();
+    final user = _currentUser ?? await _userPool.getCurrentUser();
+
+    await user?.signOut();
+
     _currentUser = null;
     _session = null;
   }

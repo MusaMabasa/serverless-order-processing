@@ -204,11 +204,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final token = widget.authService.idToken;
-
-      if (token == null || token.isEmpty) {
-        throw Exception('No Cognito ID token is available.');
-      }
+      final token = await widget.authService.getValidIdToken();
 
       final orders = await _apiService.getOrders(idToken: token);
 
