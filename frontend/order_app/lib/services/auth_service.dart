@@ -1,11 +1,13 @@
 import 'package:amazon_cognito_identity_dart_2/cognito.dart';
 
 import '../config/app_config.dart';
+import 'cognito_secure_storage.dart';
 
 class AuthService {
   final CognitoUserPool _userPool = CognitoUserPool(
     AppConfig.cognitoUserPoolId,
     AppConfig.cognitoClientId,
+    storage: CognitoSecureStorage(),
   );
 
   CognitoUserSession? _session;
