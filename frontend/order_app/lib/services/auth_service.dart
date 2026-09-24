@@ -77,6 +77,7 @@ class AuthService {
     final user = _currentUser ?? await _userPool.getCurrentUser();
 
     await user?.signOut();
+    await _userPool.storage.clear();
 
     _currentUser = null;
     _session = null;
