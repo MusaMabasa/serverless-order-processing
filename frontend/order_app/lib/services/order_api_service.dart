@@ -50,6 +50,44 @@ class OrderApiService {
     return [];
   }
 
+  Future<Map<String, dynamic>> getOrder({
+    required String idToken,
+    required String orderId,
+  }) async {
+    final encodedOrderId = Uri.encodeComponent(orderId);
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/orders/$encodedOrderId');
+
+    final response = await _client.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $idToken',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Unable to load order. HTTP ${response.statusCode}: ${response.body}',
+      );
+    }
+
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is Map<String, dynamic>) {
+      final order = decoded['order'];
+
+      if (order is Map<String, dynamic>) {
+        return order;
+      }
+
+      if (order is Map) {
+        return Map<String, dynamic>.from(order);
+      }
+    }
+
+    throw Exception('Unable to load order. Invalid API response.');
+  }
+
   Future<Map<String, dynamic>> createOrder({
     required String idToken,
     required String idempotencyKey,

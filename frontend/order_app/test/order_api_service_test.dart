@@ -45,6 +45,68 @@ void main() {
     client.close();
   });
 
+  test('GET single order returns the order', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, endsWith('/orders/ORD-001'));
+      expect(request.headers['Authorization'], 'Bearer test-token');
+
+      return http.Response(
+        jsonEncode({
+          'order': {
+            'order_id': 'ORD-001',
+            'customer_name': 'Test Customer',
+            'customer_email': 'test@example.com',
+            'status': 'COMPLETED',
+            'total': 250,
+          },
+        }),
+        200,
+      );
+    });
+
+    final service = OrderApiService(client: client);
+
+    final order = await service.getOrder(
+      idToken: 'test-token',
+      orderId: 'ORD-001',
+    );
+
+    expect(order['order_id'], 'ORD-001');
+    expect(order['customer_name'], 'Test Customer');
+    expect(order['status'], 'COMPLETED');
+    expect(order['total'], 250);
+
+    client.close();
+  });
+
+  test('GET single order reports API errors', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'GET');
+      expect(request.url.path, endsWith('/orders/ORD-NOTFOUND'));
+
+      return http.Response(
+        jsonEncode({'message': 'Order not found', 'order_id': 'ORD-NOTFOUND'}),
+        404,
+      );
+    });
+
+    final service = OrderApiService(client: client);
+
+    await expectLater(
+      service.getOrder(idToken: 'test-token', orderId: 'ORD-NOTFOUND'),
+      throwsA(
+        isA<Exception>().having(
+          (error) => error.toString(),
+          'message',
+          contains('HTTP 404'),
+        ),
+      ),
+    );
+
+    client.close();
+  });
+
   test('POST orders sends idempotency key and correct body', () async {
     final client = MockClient((request) async {
       expect(request.method, 'POST');

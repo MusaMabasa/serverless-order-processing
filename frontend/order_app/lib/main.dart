@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'create_order_screen.dart';
+import 'order_details_screen.dart';
 import 'services/auth_service.dart';
 import 'services/order_api_service.dart';
 
@@ -340,37 +341,52 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    orderId,
-                    style: const TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: orderId == '-'
+            ? null
+            : () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OrderDetailsScreen(
+                      authService: widget.authService,
+                      orderId: orderId,
                     ),
                   ),
-                ),
-                _statusChip(status),
-              ],
-            ),
-            const Divider(),
-            Wrap(
-              spacing: 32,
-              runSpacing: 12,
-              children: [
-                _InfoItem(label: 'Customer', value: customerName),
-                _InfoItem(label: 'Email', value: customerEmail),
-                _InfoItem(label: 'Total', value: total),
-                _InfoItem(label: 'Created', value: createdAt),
-              ],
-            ),
-          ],
+                );
+              },
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      orderId,
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  _statusChip(status),
+                ],
+              ),
+              const Divider(),
+              Wrap(
+                spacing: 32,
+                runSpacing: 12,
+                children: [
+                  _InfoItem(label: 'Customer', value: customerName),
+                  _InfoItem(label: 'Email', value: customerEmail),
+                  _InfoItem(label: 'Total', value: total),
+                  _InfoItem(label: 'Created', value: createdAt),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
