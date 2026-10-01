@@ -1,0 +1,124 @@
+name: Deploy BlueIT Frontend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "web_app/**"
+      - ".github/workflows/frontend-deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: blueit-frontend-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Frontend to AWS
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::943273443831:role/GitHubActions-ServerlessOrder-Deploy
+          aws-region: af-south-1
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Verify production frontend files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          files=(
+            "web_app/index.html"
+            "web_app/assets/blueit-logo.png"
+            "web_app/css/style.css"
+            "web_app/js/api.js"
+            "web_app/js/app.js"
+            "web_app/js/auth.js"
+            "web_app/js/config.js"
+          )
+
+          for file in "${files[@]}"; do
+            test -f "$file"
+            echo "Verified: $file"
+          done
+
+      - name: Upload production frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          aws s3 cp web_app/index.html \
+            s3://blueit-order-management-943273443831/index.html \
+            --content-type "text/html"
+
+          aws s3 cp web_app/assets/blueit-logo.png \
+            s3://blueit-order-management-943273443831/assets/blueit-logo.png \
+            --content-type "image/png"
+
+          aws s3 cp web_app/css/style.css \
+            s3://blueit-order-management-943273443831/css/style.css \
+            --content-type "text/css"
+
+          aws s3 cp web_app/js/api.js \
+            s3://blueit-order-management-943273443831/js/api.js \
+            --content-type "application/javascript"
+
+          aws s3 cp web_app/js/app.js \
+            s3://blueit-order-management-943273443831/js/app.js \
+            --content-type "application/javascript"
+
+          aws s3 cp web_app/js/auth.js \
+            s3://blueit-order-management-943273443831/js/auth.js \
+            --content-type "application/javascript"
+
+          aws s3 cp web_app/js/config.js \
+            s3://blueit-order-management-943273443831/js/config.js \
+            --content-type "application/javascript"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id E8QPQEABRW1E1 \
+            --paths "/*"
+
+      - name: Smoke test production website
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          URL="https://store.bluetechnology.co.za"
+
+          for attempt in {1..12}; do
+            STATUS=$(curl \
+              --silent \
+              --show-error \
+              --location \
+              --output /tmp/blueit-index.html \
+              --write-out "%{http_code}" \
+              "$URL" || true)
+
+            echo "Attempt $attempt: HTTP $STATUS"
+
+            if [ "$STATUS" = "200" ]; then
+              break
+            fi
+
+            sleep 5
+          done
+
+          test "$STATUS" = "200"
+          test -s /tmp/blueit-index.html
+
+          echo "Production website smoke test passed."
