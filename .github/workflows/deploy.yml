@@ -1,0 +1,69 @@
+name: Deploy Serverless Order Processing
+
+on:
+  workflow_run:
+    workflows:
+      - Serverless Order Processing CI
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: serverless-order-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to AWS
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: arn:aws:iam::943273443831:role/GitHubActions-ServerlessOrder-Deploy
+          aws-region: af-south-1
+
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up AWS SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate SAM template
+        run: sam validate --template-file template.yaml --lint
+
+      - name: Build SAM application
+        run: sam build
+
+      - name: Deploy SAM application
+        run: >
+          sam deploy
+          --stack-name serverless-order-processing
+          --region af-south-1
+          --resolve-s3
+          --s3-prefix serverless-order-processing
+          --capabilities CAPABILITY_IAM
+          --parameter-overrides AlertEmail=musa@bluetechnology.co.za
+          --role-arn arn:aws:iam::943273443831:role/ServerlessOrder-CloudFormationExecutionRole
+          --no-confirm-changeset
+          --no-fail-on-empty-changeset
