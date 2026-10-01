@@ -1,0 +1,187 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>BlueIT Order Management</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="loginView" class="login-wrap">
+  <div class="login-card">
+    <img src="assets/blueit-logo.png" class="login-logo" alt="BlueIT Technology">
+    <h1>Order Management</h1>
+    <p class="muted">Sign in with your BlueIT account</p>
+    <form id="loginForm">
+      <label>Email / Username</label><input id="username" autocomplete="username" required>
+      <label>Password</label><input id="password" type="password" autocomplete="current-password" required>
+      <button class="primary" type="submit">Sign In</button>
+    </form>
+    <div id="loginMessage" class="message"></div>
+  </div>
+</div>
+
+<div id="appView" class="app hidden">
+  <aside>
+    <div class="brand"><img src="assets/blueit-logo.png" alt=""><span>BlueIT</span></div>
+    <button data-page="dashboard" class="nav active">Dashboard</button>
+    <button data-page="create" class="nav">Create Order</button>
+    <button data-page="orders" class="nav">Orders</button>
+    <button data-page="admin" id="adminNav" class="nav hidden">Admin Console</button>
+    <div class="spacer"></div>
+    <div id="signedInUser" class="user"></div>
+    <button id="logoutBtn" class="nav">Sign Out</button>
+  </aside>
+  <main>
+    <header><div><h2 id="pageTitle">Dashboard</h2><p class="muted">BlueIT Technology Order Management</p></div><button id="refreshBtn">Refresh</button></header>
+
+    <section id="dashboardPage" class="page">
+      <div class="cards">
+        <div class="card"><span>Total Orders</span><strong id="totalCount">0</strong></div>
+        <div class="card"><span>Pending</span><strong id="queuedCount">0</strong></div>
+        <div class="card"><span>Accepted</span><strong id="acceptedCount">0</strong></div>
+        <div class="card"><span>Completed</span><strong id="completedCount">0</strong></div>
+      </div>
+      <div class="panel"><h3>Recent Orders (Latest 8)</h3><div id="recentOrders"></div></div>
+    </section>
+
+    <section id="createPage" class="page hidden">
+      <div class="panel form-panel">
+        <h3>Create Order</h3>
+        <form id="orderForm">
+          <div class="grid2">
+            <div><label>Customer Name</label><input id="customerName" required></div>
+            <div><label>Customer Email</label><input id="customerEmail" type="email" required></div>
+          </div>
+          <h4>Items</h4>
+          <div id="items"></div>
+          <button type="button" id="addItemBtn">+ Add Item</button>
+          <div class="form-actions"><strong>Total: R <span id="orderTotal">0.00</span></strong><button class="primary" type="submit">Submit Order</button></div>
+        </form>
+        <div id="orderMessage" class="message"></div>
+      </div>
+    </section>
+
+    <section id="ordersPage" class="page hidden">
+  <div class="panel">
+    <h3>Orders</h3>
+
+    <div class="toolbar" style="gap:12px; flex-wrap:wrap; margin-bottom:16px;">
+      <input
+        id="orderSearch"
+        type="search"
+        placeholder="Search Order ID, customer or email..."
+        style="min-width:280px; flex:1;"
+      >
+
+      <select id="orderStatusFilter">
+        <option value="ALL">All Statuses</option>
+        <option value="QUEUED">Pending</option>
+        <option value="ACCEPTED">Accepted</option>
+        <option value="COMPLETED">Completed</option>
+      </select>
+
+      <button type="button" id="clearOrderFilters">
+        Clear
+      </button>
+    </div>
+
+    <div id="orderFilterSummary" class="muted" style="margin-bottom:12px;"></div>
+
+    <div id="ordersTable"></div>
+
+<div id="orderPagination"
+     class="toolbar"
+     style="justify-content:center;gap:12px;margin-top:18px;flex-wrap:wrap;">
+
+  <button type="button" id="prevOrderPage">Previous</button>
+
+  <span id="orderPageInfo" class="muted">
+    Page 1 of 1
+  </span>
+
+  <button type="button" id="nextOrderPage">Next</button>
+
+</div>
+  </div>
+</section>
+
+    <section id="adminPage" class="page hidden">
+      <div class="tabs">
+        <button class="tab active" data-tab="users">Users</button>
+        <button class="tab" data-tab="pending">Pending Orders</button>
+        <button class="tab" data-tab="accepted">Accepted Orders</button>
+        <button class="tab" data-tab="completed">Completed Orders</button>
+        <button class="tab" data-tab="deleted">Deleted Orders</button>
+      </div>
+      <div id="usersTab" class="tabview panel">
+        <div class="toolbar"><h3>Users</h3><button id="addUserBtn" class="primary">Add User</button></div>
+        <div id="usersTable"></div>
+      </div>
+      <div id="pendingTab" class="tabview panel hidden"><h3>Pending Orders</h3><div id="pendingTable"></div></div>
+      <div id="acceptedTab" class="tabview panel hidden"><h3>Accepted Orders</h3><div id="acceptedTable"></div></div>
+      <div id="completedTab" class="tabview panel hidden"><h3>Completed Orders</h3><div id="completedTable"></div></div>
+      <div id="deletedTab" class="tabview panel hidden">
+        <div class="toolbar">
+          <div>
+            <h3>Deleted Orders</h3>
+            <p class="muted">Orders moved to the Recycle Bin can be restored.</p>
+          </div>
+          <button type="button" id="refreshDeletedOrders">Refresh Deleted Orders</button>
+        </div>
+        <div id="deletedOrdersTable"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modal" class="modal hidden"><div class="modal-card"><h3>Add User</h3>
+  <label>Name</label><input id="newGivenName" type="text" autocomplete="given-name" required>
+  <label>Surname</label><input id="newFamilyName" type="text" autocomplete="family-name" required>
+  <label>Email</label><input id="newEmail" type="email" autocomplete="email" required>
+  <label>Temporary Password</label><input id="newPassword" type="password" autocomplete="new-password" required>
+  <label class="check"><input id="newAdmin" type="checkbox"> Administrator</label>
+  <div class="modal-actions"><button id="cancelModal">Cancel</button><button id="createUserBtn" class="primary">Create User</button></div>
+  <div id="modalMessage" class="message"></div>
+</div></div>
+
+
+<div id="orderDetailsModal" class="modal hidden">
+  <div class="modal-card order-details-card">
+
+    <div class="order-details-header">
+      <div>
+        <h3>Order Details</h3>
+        <div id="detailOrderId" class="muted"></div>
+      </div>
+
+      <button type="button"
+              id="closeOrderDetailsX"
+              class="order-modal-close"
+              aria-label="Close">
+        &times;
+      </button>
+    </div>
+
+    <div id="orderDetailsContent"></div>
+
+    <div class="modal-actions">
+      <button type="button" id="closeOrderDetails">
+        Close
+      </button>
+    </div>
+
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body></html>
+
+
+
+
+
+

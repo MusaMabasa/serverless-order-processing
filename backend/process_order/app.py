@@ -13,7 +13,7 @@ table = dynamodb.Table(os.environ["ORDERS_TABLE"])
 def lambda_handler(event, context):
     """
     Process orders received from Amazon SQS
-    and store completed orders in DynamoDB.
+    and store queued orders in DynamoDB for administrator review.
     """
 
     records = event.get("Records", [])
@@ -36,9 +36,9 @@ def lambda_handler(event, context):
         if not order_id:
             raise ValueError("order_id is required")
 
-        order["status"] = "COMPLETED"
+        order["status"] = "QUEUED"
 
-        order["processed_at"] = datetime.now(
+        order["queued_at"] = datetime.now(
             timezone.utc
         ).isoformat()
 
@@ -47,14 +47,14 @@ def lambda_handler(event, context):
         )
 
         print(
-            f"Order {order_id} processed successfully"
+            f"Order {order_id} queued successfully"
         )
 
     return {
         "statusCode": 200,
         "body": json.dumps(
             {
-                "message": "Orders processed successfully"
+                "message": "Orders queued successfully"
             }
         )
     }

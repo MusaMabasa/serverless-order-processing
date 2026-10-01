@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from decimal import Decimal
 
@@ -53,6 +53,11 @@ def lambda_handler(event, context):
                 result.get("Items", [])
             )
 
+        orders = [
+            order
+            for order in orders
+            if order.get("status") != "DELETED"
+        ]
         orders.sort(
             key=lambda order: order.get(
                 "created_at",

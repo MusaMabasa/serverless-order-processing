@@ -1,0 +1,114 @@
+﻿:root{--navy:#071B33;--navy2:#102A4C;--blue:#0878D1;--bg:#F4F7FA;--card:#fff;--text:#172033;--muted:#697586;--border:#DCE3EA;--success:#138A55;--warn:#B7791F;--danger:#C53030}*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}button,input{font:inherit}button{cursor:pointer;border:1px solid var(--border);background:#fff;border-radius:8px;padding:10px 14px}button.primary{background:var(--blue);color:#fff;border-color:var(--blue)}button.danger{color:#fff;background:var(--danger);border-color:var(--danger)}button.small{padding:6px 9px;font-size:12px}.hidden{display:none!important}.muted{color:var(--muted)}.login-wrap{min-height:100vh;display:grid;place-items:center;background:linear-gradient(135deg,var(--navy),var(--navy2))}.login-card{width:min(420px,92vw);background:#fff;border-radius:16px;padding:36px;box-shadow:0 24px 60px #0004}.login-logo{max-width:170px;max-height:80px;object-fit:contain}.login-card h1{margin-bottom:4px}.login-card label,.form-panel label,.modal-card label{display:block;font-weight:600;margin:16px 0 6px}.login-card input,.form-panel input,.modal-card input{width:100%;padding:11px;border:1px solid var(--border);border-radius:8px}.login-card .primary{width:100%;margin-top:22px}.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}aside{background:var(--navy);color:#fff;padding:20px 14px;display:flex;flex-direction:column;gap:7px;min-height:100vh}.brand{display:flex;align-items:center;gap:10px;font-size:21px;font-weight:700;padding:5px 8px 24px}.brand img{width:48px;height:38px;object-fit:contain;background:#fff;border-radius:6px}.nav{background:transparent;color:#dbe8f6;border:0;text-align:left;padding:12px}.nav:hover,.nav.active{background:var(--navy2);color:#fff}.spacer{flex:1}.user{font-size:12px;color:#aebfd1;padding:8px;word-break:break-all}main{padding:28px;min-width:0}header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}header h2{margin:0}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}.card,.panel{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px}.card span{display:block;color:var(--muted);font-size:13px}.card strong{font-size:30px;display:block;margin-top:8px}.panel{margin-bottom:18px;overflow:auto}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}.item-row{display:grid;grid-template-columns:1.8fr .7fr .8fr auto;gap:10px;align-items:end;margin:10px 0}.form-actions,.toolbar,.modal-actions{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:10px}.message{margin-top:12px;font-size:14px}.message.error{color:var(--danger)}.message.ok{color:var(--success)}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:11px 9px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}th{color:var(--muted);font-size:12px;text-transform:uppercase}.badge{padding:4px 8px;border-radius:999px;background:#eef2f6;font-size:12px}.tabs{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}.tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}.modal{position:fixed;inset:0;background:#0008;display:grid;place-items:center;padding:20px}.modal-card{width:min(440px,95vw);background:#fff;padding:24px;border-radius:14px}.check{display:flex!important;gap:8px;align-items:center}.check input{width:auto!important}.actions{display:flex;gap:5px;flex-wrap:wrap}@media(max-width:900px){.app{grid-template-columns:1fr}aside{min-height:auto;flex-direction:row;flex-wrap:wrap;align-items:center}.brand{padding:5px}.spacer{display:none}main{padding:16px}.cards{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.item-row{grid-template-columns:1fr 80px 100px}.item-row button{grid-column:1/-1}}
+/* BlueIT Order Details */
+.order-details-card{
+ width:min(820px,96vw);
+ max-height:90vh;
+ overflow:auto
+}
+
+.order-details-header{
+ display:flex;
+ align-items:flex-start;
+ justify-content:space-between;
+ gap:20px;
+ border-bottom:1px solid var(--border);
+ padding-bottom:14px;
+ margin-bottom:18px
+}
+
+.order-details-header h3{
+ margin:0 0 5px
+}
+
+.order-modal-close{
+ border:0;
+ background:transparent;
+ font-size:28px;
+ line-height:1;
+ padding:0 6px;
+ color:var(--muted)
+}
+
+.order-detail-status{
+ margin-bottom:16px
+}
+
+.order-detail-grid{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:12px
+}
+
+.order-detail-box{
+ border:1px solid var(--border);
+ border-radius:10px;
+ padding:14px;
+ background:var(--bg)
+}
+
+.order-detail-box span{
+ display:block;
+ color:var(--muted);
+ font-size:12px;
+ margin-bottom:5px
+}
+
+.order-detail-box strong{
+ display:block;
+ word-break:break-word
+}
+
+.order-detail-section{
+ margin-top:22px
+}
+
+.order-detail-section h4{
+ margin:0 0 10px
+}
+
+.order-items-wrap{
+ overflow-x:auto
+}
+
+.order-timeline{
+ display:grid;
+ grid-template-columns:1fr 1fr;
+ gap:10px
+}
+
+.order-timeline div{
+ border-left:3px solid var(--blue);
+ padding:9px 12px;
+ background:var(--bg);
+ border-radius:0 8px 8px 0
+}
+
+.order-timeline span{
+ display:block;
+ color:var(--muted);
+ font-size:12px;
+ margin-bottom:4px
+}
+
+.order-timeline strong{
+ font-size:13px;
+ word-break:break-word
+}
+
+@media(max-width:650px){
+ .order-detail-grid,
+ .order-timeline{
+  grid-template-columns:1fr
+ }
+}
+
+
+/* BlueIT lifecycle audit actor */
+.order-timeline small{
+ display:block;
+ color:var(--muted);
+ margin-top:4px;
+ font-size:12px;
+ word-break:break-word
+}
+

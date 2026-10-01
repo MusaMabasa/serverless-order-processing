@@ -1,4 +1,4 @@
-AWSTemplateFormatVersion: "2010-09-09"
+﻿AWSTemplateFormatVersion: "2010-09-09"
 Transform: AWS::Serverless-2016-10-31
 
 Description: >
@@ -153,7 +153,7 @@ Resources:
                     minimum: 0
 
       Cors:
-        AllowMethods: "'GET,POST,PATCH,OPTIONS'"
+        AllowMethods: "'GET,POST,PATCH,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization,Idempotency-Key'"
         AllowOrigin: "'*'"
       Auth:
@@ -194,9 +194,12 @@ Resources:
 
   OrdersTable:
     Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     Properties:
       TableName: ServerlessOrders
       BillingMode: PAY_PER_REQUEST
+      DeletionProtectionEnabled: true
       SSESpecification:
         SSEEnabled: true
       PointInTimeRecoverySpecification:
@@ -235,6 +238,7 @@ Resources:
                 - dynamodb:PutItem
                 - dynamodb:GetItem
                 - dynamodb:DeleteItem
+                - dynamodb:UpdateItem
               Resource: !GetAtt OrdersTable.Arn
       Events:
         CreateOrderApi:
@@ -346,6 +350,101 @@ Resources:
   # PROCESS ORDER LAMBDA
   # SQS -> LAMBDA -> DYNAMODB
   # =======================================================
+
+  # =======================================================
+  # ADMIN LAMBDA
+  # Cognito administration + order deletion
+  # =======================================================
+
+  AdminFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: serverless-admin
+      CodeUri: backend/admin/
+      Handler: app.lambda_handler
+
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref OrderUserPool
+          ORDERS_TABLE: !Ref OrdersTable
+
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:ListUsers
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminListGroupsForUser
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminRemoveUserFromGroup
+              Resource: !GetAtt OrderUserPool.Arn
+
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:UpdateItem
+                - dynamodb:Scan
+              Resource: !GetAtt OrdersTable.Arn
+
+      Events:
+        ListAdminUsersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/users
+            Method: GET
+
+        CreateAdminUserApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/users
+            Method: POST
+
+        UpdateAdminUserApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/users/{username}
+            Method: PATCH
+
+        DeleteAdminUserApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/users/{username}
+            Method: DELETE
+
+
+        UpdateAdminOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/orders/{order_id}
+            Method: PATCH
+
+        ListDeletedAdminOrdersApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/orders/deleted
+            Method: GET
+
+        RestoreAdminOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/orders/{order_id}/restore
+            Method: PATCH
+        DeleteAdminOrderApi:
+          Type: Api
+          Properties:
+            RestApiId: !Ref OrderApi
+            Path: /admin/orders/{order_id}
+            Method: DELETE
 
   ProcessOrderFunction:
     Type: AWS::Serverless::Function
@@ -1077,3 +1176,10 @@ Outputs:
   DashboardName:
     Description: CloudWatch dashboard
     Value: serverless-order-processing-dashboard
+
+
+
+
+
+
+

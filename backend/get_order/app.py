@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from decimal import Decimal
 
@@ -70,6 +70,15 @@ def lambda_handler(event, context):
                 }
             )
 
+        if order.get("status") == "DELETED":
+            return response(
+                404,
+                {
+                    "message": "Order not found",
+                    "order_id": order_id
+                }
+            )
+
         print(
             f"Order {order_id} retrieved successfully"
         )
@@ -93,3 +102,4 @@ def lambda_handler(event, context):
                 "message": "Unable to retrieve order"
             }
         )
+

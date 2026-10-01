@@ -1,4 +1,4 @@
-import json
+﻿import json
 import os
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -94,9 +94,13 @@ def lambda_handler(event, context):
             },
             ExpressionAttributeValues={
                 ":status": status,
-                ":updated_at": updated_at
+                ":updated_at": updated_at,
+                ":deleted_status": "DELETED"
             },
-            ConditionExpression="attribute_exists(order_id)",
+            ConditionExpression=(
+                "attribute_exists(order_id) AND "
+                "(attribute_not_exists(#status) OR #status <> :deleted_status)"
+            ),
             ReturnValues="ALL_NEW"
         )
 

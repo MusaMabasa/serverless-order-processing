@@ -65,3 +65,34 @@ frontend/order_app/.packages
 # Flutter IDE files
 frontend/order_app/.idea/
 frontend/order_app/*.iml
+# ==================================================
+# BlueIT local development / recovery artifacts
+# ==================================================
+# Timestamped/local backups
+*.backup-*
+*.duplicate-copy-*
+# Recovery snapshots
+admin-recovery/
+final-backup-before-order-workflow/
+# Frontend deployment staging
+web_app_deploy/
+# Generated deployment packages
+packaged-*.yaml
+*.zip
+# Local AWS CLI configuration snapshots
+cloudfront-*.json
+oac-config.json
+blueit-bucket-policy.json
+# Local DynamoDB/API test files
+dynamodb-*.json
+order-key.json
+test-order-key.json
+# Local Git ignore backups
+.gitignore.backup-*
+# Legacy local application snapshots
+backend/admin/app-before-*.py
+backend/admin/app-final-working.py
+desktop_app/*before-*.py
+desktop_app/*final-working.py
+desktop_app/app_basic_backup.py
+desktop_app/BlueIT_app_admin.py
