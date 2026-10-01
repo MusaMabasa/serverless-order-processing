@@ -74,7 +74,7 @@ def test_valid_order_is_written_to_dynamodb():
 
     assert (
         body["message"]
-        == "Orders processed successfully"
+        == "Orders queued successfully"
     )
 
     mock_put_item.assert_called_once()
@@ -84,8 +84,8 @@ def test_valid_order_is_written_to_dynamodb():
     )
 
     assert saved_item["order_id"] == "ORD-TEST1234"
-    assert saved_item["status"] == "COMPLETED"
-    assert "processed_at" in saved_item
+    assert saved_item["status"] == "QUEUED"
+    assert "queued_at" in saved_item
     assert saved_item["total"] == Decimal("30000")
 
 
